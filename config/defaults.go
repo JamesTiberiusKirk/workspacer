@@ -5,6 +5,7 @@ import (
 )
 
 var (
+	// Example config and my personal config
 	DefaultGlobalConfig = GlobalUserConfig{
 		Workspaces: map[string]WorkspaceConfig{
 			"ws": {

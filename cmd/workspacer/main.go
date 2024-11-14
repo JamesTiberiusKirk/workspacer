@@ -13,6 +13,11 @@ type flags struct {
 }
 
 func main() {
+	// TODO: config stuff
+	// check for any global configs in users home directory
+	// if debug and does not exist, use default config
+	// if not debug complain
+
 	args := os.Args
 	mc, args := config.ParseArgs(args)
 
@@ -44,6 +49,7 @@ func main() {
 	log.Debug("args: %v len(args):%d", args, len(args))
 
 	switch args[0] {
+	case "NC", "new_config":
 	case "C", "clone":
 		// TODO: get list of all repos in an org and allow the user to clone one
 		// check if the directory already exists and mark it as so in the list
