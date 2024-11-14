@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-
-	gotmux "github.com/jubnzv/go-tmux"
 )
 
 type Orientation string
@@ -77,45 +75,6 @@ func (c *GlobalUserConfig) IsValid() bool {
 	//	- Need to validate session preset names
 	return false
 }
-
-var (
-	DefaultGlobalConfig = GlobalUserConfig{
-		Workspaces: map[string]WorkspaceConfig{
-			"ws": {
-				Name:          "Projects",
-				Prefix:        "",
-				Path:          "~/Projects/",
-				SessionPreset: "default-vi",
-			},
-			"av": {
-				Name:          "Aviva",
-				Prefix:        "av",
-				Path:          "~/Aviva",
-				OrgGithub:     "github.com/aviva-verde",
-				SessionPreset: "default-vi",
-			},
-		},
-		SessionPresets: map[string]SessionConfig{
-			"default-vi": {
-				Windows: []WindowConfig{
-					{
-						Name:   "vi",
-						Layout: gotmux.LayoutEvenVertical,
-						Panes: []PanesConfig{
-							{Command: "vi", Orientation: OrientationVertical},
-							{Command: "vi", Orientation: OrientationHorizontal},
-							{Command: "vi", Orientation: OrientationVertical},
-						},
-					},
-					{
-						Name:  "shell",
-						Panes: []PanesConfig{},
-					},
-				},
-			},
-		},
-	}
-)
 
 const (
 	defaultConfigPath = ".config/workspacer/"

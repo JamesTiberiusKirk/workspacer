@@ -2,10 +2,8 @@ package workspacer
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/JamesTiberiusKirk/workspacer/config"
 	gotmux "github.com/jubnzv/go-tmux"
@@ -44,11 +42,7 @@ func StartOrSwitchToSession(
 		return
 	}
 
-	path := filepath.Join(wc.Path, project)
-	if strings.HasPrefix(path, "~/") {
-		dirname, _ := os.UserHomeDir()
-		path = filepath.Join(dirname, path[2:])
-	}
+	path := filepath.Join(getWorkspacePath(wc), project)
 
 	sessionConfig := wc.Session
 	if wc.SessionPreset != "" {
