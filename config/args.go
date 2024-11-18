@@ -24,14 +24,6 @@ type MainFlags struct {
 func ParseArgs(args []string) (MainFlags, []string) {
 	m := MainFlags{}
 
-	// NOTE: sadly this does not work
-	// 0 will always be the binary name and not the alias name sadly
-	// TODO: remove this feature, or find a way to make it work
-	if !strings.Contains(args[0], "go-build") || strings.Contains(args[0], "workspacer") {
-		log.Debug("Getting workspace from args[0]: %s\n", args[0])
-		m.Workspace = args[0]
-	}
-
 	args = args[1:]
 	flaglessArgs := []string{}
 
