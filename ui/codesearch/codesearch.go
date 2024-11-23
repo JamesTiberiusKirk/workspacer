@@ -1,9 +1,8 @@
-package telescope
+package codesearch
 
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -15,11 +14,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/google/go-github/v66/github"
-	"github.com/joho/godotenv"
-
-	"github.com/alecthomas/chroma/formatters"
-	"github.com/alecthomas/chroma/lexers"
-	"github.com/alecthomas/chroma/styles"
 )
 
 // TODO:
@@ -28,10 +22,12 @@ import (
 // - [x] handle line overflow/wrapping
 // - [x] highlight search terms
 // - [x] fix issue where some of the code snippets (usually markdown or comments) get highlighted on selection
+// - [ ] make the filter carrot me a / vim style search and only appear when the user presses /
 
 // BUG:
 // - [ ] using the highlight style breaks the rest of the code highlighting
-// - [ ] enabling the filder blanks the screen out, then existing brings back the normal screen with stuff in the input
+// - [x] enabling the filder blanks the screen out, then existing brings back the normal screen with stuff in the input
+// - [ ] work on the partly functioning viewport selection scroll
 
 var (
 	subtle    = lipgloss.AdaptiveColor{Light: "#D9DCCF", Dark: "#383838"}
@@ -65,6 +61,11 @@ var (
 			Foreground(lipgloss.Color("#ffffff")).
 			Bold(true)
 
+	filterStyle = lipgloss.NewStyle().
+			Background(lipgloss.Color("#ff2d00")). // Pink background
+			Foreground(lipgloss.Color("#ffffff")).
+			Bold(true)
+
 	footerBarStyle = lipgloss.NewStyle().
 			Foreground(highlight).
 			Bold(true).
@@ -88,28 +89,34 @@ const (
 	stateResultsFilter
 )
 
+type (
+	returnToSearchMsg    struct{}
+	resultsFilterEnabled struct{}
+	searchResultsMsg     struct {
+		results []githubCodeSearchResult
+		err     error
+	}
+)
+
 type Model struct {
-	query              string
-	results            []searchResult
-	cursor             int
+	searchInOrg githubCodeSearchFunc
+
 	searchInput        textinput.Model
 	resultsFilterInput textinput.Model
+	viewport           viewport.Model
+
+	query              string
+	results            []githubCodeSearchResult
+	cursor             int
 	filterEnabled      bool
 	err                error
-	viewport           viewport.Model
 	itemHeight         int
 	visibleItemCount   int
 	state              inputState
+	clearFilterConfirm bool
 }
 
-type searchResult struct {
-	repo     string
-	file     string
-	content  string
-	language string
-}
-
-func New() Model {
+func New(searchInOrg githubCodeSearchFunc) Model {
 	ti := textinput.New()
 	ti.Placeholder = "Enter GitHub search query..."
 	ti.Focus()
@@ -118,6 +125,8 @@ func New() Model {
 	ti.TextStyle = lipgloss.NewStyle().Foreground(special)
 
 	return Model{
+		searchInOrg: searchInOrg,
+
 		searchInput:        ti,
 		resultsFilterInput: textinput.New(),
 		viewport:           viewport.New(0, 0),
@@ -129,9 +138,6 @@ func New() Model {
 func (m Model) Init() tea.Cmd {
 	return textinput.Blink
 }
-
-type returnToSearchMsg struct{}
-type resultsFilterEnabled struct{}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
@@ -147,11 +153,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.query = m.searchInput.Value()
 				m.state = stateResults
 				return m, m.search
-			default:
-				m.searchInput, cmd = m.searchInput.Update(msg)
 			}
 		case stateResults:
 			switch msg.String() {
+			case "esc":
+				if m.clearFilterConfirm {
+					m.clearFilterConfirm = true
+				} else {
+					m.clearFilterConfirm = false
+					m.resultsFilterInput.SetValue("")
+				}
 			case "ctrl+c":
 				return m, tea.Quit
 			case "q":
@@ -172,7 +183,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.filterEnabled = true
 				m.resultsFilterInput.Focus()
 				return m, textinput.Blink
-				// return m, func() tea.Msg { return resultsFilterEnabled{} }
 			case "enter":
 				workspacer.StartOrSwitchToSession(
 					"av",
@@ -188,8 +198,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = stateResults
 				m.filterEnabled = false
 				m.resultsFilterInput.Blur()
-			default:
-				m.resultsFilterInput.Update(msg)
 			}
 
 		}
@@ -225,22 +233,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.state {
 	case stateInput:
 		m.searchInput, cmd = m.searchInput.Update(msg)
-	// case stateResults:
+		// case stateResults:
 	case stateResultsFilter:
 		m.resultsFilterInput, cmd = m.resultsFilterInput.Update(msg)
+		m.viewport.SetContent(m.viewportContent())
+		m.viewport, cmd = m.viewport.Update(msg)
 	default:
 		m.viewport.SetContent(m.viewportContent())
 		m.viewport, cmd = m.viewport.Update(msg)
 	}
 
-	// if m.state == stateInput {
-	// 	m.searchInput, cmd = m.searchInput.Update(msg)
-	// } else {
-	// 	m.viewport.SetContent(m.viewportContent())
-	// 	m.viewport, cmd = m.viewport.Update(msg)
-	// }
-
 	return m, cmd
+}
+
+func (m Model) View() string {
+	width, height := m.viewport.Width, m.viewport.Height
+
+	switch m.state {
+	case stateInput:
+		var s strings.Builder
+		s.WriteString(m.searchInput.View() + "\n\n")
+		s.WriteString(infoStyle.Render("Press Enter to search, Ctrl+C to quit"))
+		return lipgloss.JoinVertical(lipgloss.Left, s.String())
+	case stateResults, stateResultsFilter:
+		searchQueryStyle := lipgloss.NewStyle().
+			Foreground(special).
+			Italic(true)
+		titleBar := titleStyle.Render("GitHub Code Search: ", searchQueryStyle.Render(m.query))
+		footerBar := m.createStatusLine(width)
+		mainContent := borderStyle.Render(m.viewport.View())
+		return lipgloss.JoinVertical(
+			lipgloss.Left,
+			titleBar,
+			lipgloss.NewStyle().Height(height-1).Render(mainContent),
+			footerBar,
+		)
+	}
+	return ""
 }
 
 func (m *Model) updateCursor(direction int) {
@@ -280,45 +309,10 @@ func (m *Model) updateCursor(direction int) {
 	m.cursor = newCursor
 }
 
-func (m Model) View() string {
-
-	width, height := m.viewport.Width, m.viewport.Height
-
-	switch m.state {
-	case stateInput:
-		var s strings.Builder
-		s.WriteString(m.searchInput.View() + "\n\n")
-		s.WriteString(infoStyle.Render("Press Enter to search, Ctrl+C to quit"))
-		return lipgloss.JoinVertical(lipgloss.Left, s.String())
-	case stateResults:
-
-		searchQueryStyle := lipgloss.NewStyle().
-			Foreground(special).
-			Italic(true)
-
-		titleBar := titleStyle.Render("GitHub Code Search: ", searchQueryStyle.Render(m.query))
-		footerBar := m.createStatusLine(width)
-		mainContent := borderStyle.Render(m.viewport.View())
-
-		return lipgloss.JoinVertical(
-			lipgloss.Left,
-			titleBar,
-			lipgloss.NewStyle().Height(height-1).Render(mainContent),
-			footerBar,
-		)
-	}
-
-	return ""
-}
-
-func (m Model) createStatusLine(width int) string {
+func (m *Model) createStatusLine(width int) string {
 	width = width - 2
 	left := "Press ↑/↓ to navigate, q to search again, Ctrl+C to quit " + m.resultsFilterInput.View()
 	right := ""
-
-	// if m.filterEnabled {
-	// right =
-	// }
 
 	// Create status line content here
 	left = lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render(left)
@@ -331,15 +325,52 @@ func (m Model) createStatusLine(width int) string {
 	return footerBarStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left, left, center, right))
 }
 
-func newGitHubClient() *github.Client {
-	godotenv.Load()
-	return github.NewClient(nil).WithAuthToken(os.Getenv("GITHUB_AUTH"))
+func (m *Model) viewportContent() string {
+	var s strings.Builder
+	if m.err != nil {
+		s.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(fmt.Sprintf("Error: %v\n\n", m.err)))
+	}
+	filterText := ""
+
+	if len(m.results) > 0 {
+		filterText = strings.ToLower(m.resultsFilterInput.Value())
+		for i, result := range m.results {
+			if filterText == "" || strings.Contains(strings.ToLower(result.content), filterText) {
+				style := normalStyle
+				if m.cursor == i {
+					style = selectedStyle
+				}
+				repoLine := urlStyle.Render(result.repo)
+				fileLine := infoStyle.Render("File: " + result.file)
+				wrappedCode := wrapText(result.content, m.viewport.Width-10)
+				highlightedCode := highlightCode(m.query, filterText, wrappedCode, result.language)
+				contentLine := style.Render(highlightedCode)
+				resultBox := lipgloss.JoinVertical(lipgloss.Left,
+					repoLine,
+					fileLine,
+					contentLine,
+				)
+				s.WriteString(resultStyle.Render(resultBox) + "\n\n")
+			}
+		}
+	}
+
+	if filterText != "" {
+		re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(filterText))
+		filtered := re.ReplaceAllStringFunc(s.String(), func(match string) string {
+			return filterStyle.Render(match)
+		})
+
+		return filtered
+	}
+
+	return s.String()
 }
 
-func (m Model) search() tea.Msg {
-	client := newGitHubClient()
-
-	searchResp, githubResp, err := client.Search.Code(context.Background(), m.query+" org:aviva-verde", &github.SearchOptions{
+// TODO: still need to extract org out of this
+func (m *Model) search() tea.Msg {
+	// searchResp, githubResp, err := client.Search.Code(context.Background(), m.query+" org:aviva-verde", &github.SearchOptions{
+	searchResp, githubResp, err := m.searchInOrg(context.Background(), m.query+" org:aviva-verde", &github.SearchOptions{
 		TextMatch: true,
 		ListOptions: github.ListOptions{
 			PerPage: 100,
@@ -352,14 +383,14 @@ func (m Model) search() tea.Msg {
 		return searchResultsMsg{err: fmt.Errorf("GitHub API error: %s", githubResp.Status)}
 	}
 
-	var searchResults []searchResult
+	var searchResults []githubCodeSearchResult
 	for _, result := range searchResp.CodeResults {
 		language := ""
 		if result.Path != nil {
 			language = strings.TrimPrefix(filepath.Ext(*result.Path), ".")
 		}
 
-		searchResults = append(searchResults, searchResult{
+		searchResults = append(searchResults, githubCodeSearchResult{
 			repo:     *result.Repository.FullName,
 			file:     *result.Path,
 			content:  *result.TextMatches[0].Fragment,
@@ -368,98 +399,4 @@ func (m Model) search() tea.Msg {
 	}
 
 	return searchResultsMsg{results: searchResults}
-}
-
-func (m Model) viewportContent() string {
-	var s strings.Builder
-	if m.err != nil {
-		s.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(fmt.Sprintf("Error: %v\n\n", m.err)))
-	}
-	if len(m.results) > 0 {
-		for i, result := range m.results {
-			style := normalStyle
-			if m.cursor == i {
-				style = selectedStyle
-			}
-			repoLine := urlStyle.Render(result.repo)
-			fileLine := infoStyle.Render("File: " + result.file)
-			wrappedCode := wrapText(result.content, m.viewport.Width-10) // Subtract padding
-			highlightedCode := highlightCode(m.query, wrappedCode, result.language)
-			contentLine := style.Render(highlightedCode)
-			resultBox := lipgloss.JoinVertical(lipgloss.Left,
-				repoLine,
-				fileLine,
-				contentLine,
-			)
-			s.WriteString(resultStyle.Render(resultBox) + "\n\n")
-		}
-	}
-	return s.String()
-}
-
-func wrapText(text string, width int) string {
-	lines := strings.Split(text, "\n")
-	var wrappedLines []string
-
-	for _, line := range lines {
-		if len(line) <= width {
-			wrappedLines = append(wrappedLines, line)
-			continue
-		}
-
-		wrappedLines = append(wrappedLines, line[0:width-1])
-		wl := line[width:]
-		for {
-			if len(wl) < width {
-				wrappedLines = append(wrappedLines, wl)
-				break
-			}
-			wl = wl[:width-1]
-			wrappedLines = append(wrappedLines, wl)
-		}
-
-	}
-
-	return strings.Join(wrappedLines, "\n")
-}
-
-func highlightCode(query, code, language string) string {
-	hightlightTokens := strings.Split(query, " ")
-
-	lexer := lexers.Get(language)
-	if lexer == nil {
-		lexer = lexers.Fallback
-	}
-	style := styles.Get("monokai")
-	if style == nil {
-		style = styles.Fallback
-	}
-	formatter := formatters.Get("terminal256")
-	if formatter == nil {
-		formatter = formatters.Fallback
-	}
-	iterator, err := lexer.Tokenise(nil, code)
-	if err != nil {
-		return code
-	}
-	var buf strings.Builder
-	err = formatter.Format(&buf, style, iterator)
-	if err != nil {
-		return code
-	}
-	syntaxHightlited := buf.String()
-
-	for _, token := range hightlightTokens {
-		re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(token))
-		syntaxHightlited = re.ReplaceAllStringFunc(syntaxHightlited, func(match string) string {
-			return highlightStyle.Render(match)
-		})
-	}
-
-	return syntaxHightlited
-}
-
-type searchResultsMsg struct {
-	results []searchResult
-	err     error
 }
