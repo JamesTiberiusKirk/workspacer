@@ -1,7 +1,7 @@
 package list
 
 import (
-	"github.com/JamesTiberiusKirk/workspacer/list/list"
+	"github.com/JamesTiberiusKirk/workspacer/ui/list/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )

@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/JamesTiberiusKirk/workspacer/config"
-	"github.com/JamesTiberiusKirk/workspacer/list"
 	"github.com/JamesTiberiusKirk/workspacer/log"
+	"github.com/JamesTiberiusKirk/workspacer/ui/list"
 )
 
 func ChooseFromOpenWorkspaceProjectsAndSwitch(workspace string, workspaceConfig config.WorkspaceConfig, sessionPresets map[string]config.SessionConfig) {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/JamesTiberiusKirk/workspacer/config"
 	gotmux "github.com/jubnzv/go-tmux"
@@ -15,6 +16,20 @@ func StartOrSwitchToSession(
 	presets map[string]config.SessionConfig,
 	project string,
 ) {
+
+	// TODO: if project does not exist, see if we can clone it?
+
+	fileOption := ""
+	lineNumber := ""
+	if strings.Contains(project, ":") {
+		split := strings.Split(project, ":")
+		project = split[0]
+		fileOption = split[1]
+		if len(split) > 2 {
+			lineNumber = split[2]
+		}
+	}
+
 	sessionName := wsName + "-" + project
 	server := new(gotmux.Server)
 
@@ -43,6 +58,9 @@ func StartOrSwitchToSession(
 	}
 
 	path := filepath.Join(getWorkspacePath(wc), project)
+
+	// TODO: check if the path is valid
+	// This is where the project will be cloned if config has been setup
 
 	sessionConfig := wc.Session
 	if wc.SessionPreset != "" {
@@ -96,6 +114,12 @@ func StartOrSwitchToSession(
 
 		if len(panesConfig) <= i {
 			continue
+		}
+
+		if panesConfig[i].Command == "vi" && fileOption != "" {
+			panesConfig[i].Command = "vi ./" + fileOption
+		} else if panesConfig[i].Command == "vi" && fileOption != "" {
+			panesConfig[i].Command = "vi " + "+" + lineNumber + "|norm! zt" + " ./" + fileOption
 		}
 
 		p.RunCommand(panesConfig[i].Command)
