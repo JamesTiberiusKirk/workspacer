@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/JamesTiberiusKirk/workspacer/config"
@@ -18,16 +17,24 @@ import (
 
 // TODO:
 // - [ ] clean this up
-// - [ ] pull out the search logic outside of this package
+// - [x] pull out the search logic outside of this package
 // - [x] handle line overflow/wrapping
 // - [x] highlight search terms
 // - [x] fix issue where some of the code snippets (usually markdown or comments) get highlighted on selection
-// - [ ] make the filter carrot me a / vim style search and only appear when the user presses /
+// - [x] make the filter carrot me a / vim style search and only appear when the user presses /
+// - [ ] Figure out the line number situation with fragment
+// - [ ] Rework the selected sytles, maybe just make the border a different colour
+// - [ ] Fix row length so that it doesn't look odd
+// - [ ] Add loading spinner
 
 // BUG:
+// - [ ] filter input cursor does not blink
 // - [ ] using the highlight style breaks the rest of the code highlighting
 // - [x] enabling the filder blanks the screen out, then existing brings back the normal screen with stuff in the input
 // - [ ] work on the partly functioning viewport selection scroll
+// - [ ] fix filtering not highlighting over the highlighted search terms
+// - [x] sometimes this still breaks the special terminal input "ctrl+c"
+//	- NOTE: Seems like os.Exist is the culprit here....
 
 var (
 	subtle    = lipgloss.AdaptiveColor{Light: "#D9DCCF", Dark: "#383838"}
@@ -101,9 +108,9 @@ type (
 type Model struct {
 	searchInOrg githubCodeSearchFunc
 
-	searchInput        textinput.Model
-	resultsFilterInput textinput.Model
-	viewport           viewport.Model
+	searchInput textinput.Model
+	filterInput textinput.Model
+	viewport    viewport.Model
 
 	query              string
 	results            []githubCodeSearchResult
@@ -114,9 +121,11 @@ type Model struct {
 	visibleItemCount   int
 	state              inputState
 	clearFilterConfirm bool
+
+	wc config.WorkspaceConfig
 }
 
-func New(searchInOrg githubCodeSearchFunc) Model {
+func New(wc config.WorkspaceConfig, searchInOrg githubCodeSearchFunc) Model {
 	ti := textinput.New()
 	ti.Placeholder = "Enter GitHub search query..."
 	ti.Focus()
@@ -124,14 +133,19 @@ func New(searchInOrg githubCodeSearchFunc) Model {
 	ti.PromptStyle = lipgloss.NewStyle().Foreground(highlight)
 	ti.TextStyle = lipgloss.NewStyle().Foreground(special)
 
+	filterInput := textinput.New()
+	filterInput.Prompt = ""
+
 	return Model{
 		searchInOrg: searchInOrg,
 
-		searchInput:        ti,
-		resultsFilterInput: textinput.New(),
-		viewport:           viewport.New(0, 0),
-		itemHeight:         12, // Adjust based on your actual item height
-		state:              stateInput,
+		searchInput: ti,
+		filterInput: filterInput,
+		viewport:    viewport.New(0, 0),
+		itemHeight:  12, // Adjust based on your actual item height
+		state:       stateInput,
+
+		wc: wc,
 	}
 }
 
@@ -147,7 +161,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.state {
 		case stateInput:
 			switch msg.String() {
-			case "ctrl+c", "esc":
+			case "ctrl+c":
+				return m, tea.Quit
+			case "esc":
 				return m, tea.Quit
 			case "enter":
 				m.query = m.searchInput.Value()
@@ -161,7 +177,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.clearFilterConfirm = true
 				} else {
 					m.clearFilterConfirm = false
-					m.resultsFilterInput.SetValue("")
+					m.filterInput.SetValue("")
 				}
 			case "ctrl+c":
 				return m, tea.Quit
@@ -181,7 +197,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "/":
 				m.state = stateResultsFilter
 				m.filterEnabled = true
-				m.resultsFilterInput.Focus()
+				m.filterInput.Prompt = "/"
+				// m.filterInput.Cursor.Blink = true
+				// m.filterInput.Cursor.BlinkSpeed = time.Second * 1
+				// m.filterInput.Cursor.Focus()
+				m.filterInput.Focus()
 				return m, textinput.Blink
 			case "enter":
 				workspacer.StartOrSwitchToSession(
@@ -194,10 +214,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case stateResultsFilter:
 			switch msg.String() {
-			case "ctrl+c", "esc", "enter":
+			case "ctrl+c":
+				return m, tea.Quit
+			case "esc", "enter":
 				m.state = stateResults
 				m.filterEnabled = false
-				m.resultsFilterInput.Blur()
+				m.filterInput.Prompt = ""
+				m.filterInput.Blur()
 			}
 
 		}
@@ -211,7 +234,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case resultsFilterEnabled:
 		m.state = stateResultsFilter
 		m.filterEnabled = true
-		m.resultsFilterInput.Focus()
+		m.filterInput.Focus()
 
 	case returnToSearchMsg:
 		m.state = stateInput
@@ -233,9 +256,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.state {
 	case stateInput:
 		m.searchInput, cmd = m.searchInput.Update(msg)
-		// case stateResults:
 	case stateResultsFilter:
-		m.resultsFilterInput, cmd = m.resultsFilterInput.Update(msg)
+		m.filterInput, cmd = m.filterInput.Update(msg)
 		m.viewport.SetContent(m.viewportContent())
 		m.viewport, cmd = m.viewport.Update(msg)
 	default:
@@ -311,7 +333,7 @@ func (m *Model) updateCursor(direction int) {
 
 func (m *Model) createStatusLine(width int) string {
 	width = width - 2
-	left := "Press ↑/↓ to navigate, q to search again, Ctrl+C to quit " + m.resultsFilterInput.View()
+	left := "Press ↑/↓ to navigate, q to search again, Ctrl+C to quit " + m.filterInput.View()
 	right := ""
 
 	// Create status line content here
@@ -330,38 +352,44 @@ func (m *Model) viewportContent() string {
 	if m.err != nil {
 		s.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(fmt.Sprintf("Error: %v\n\n", m.err)))
 	}
+
 	filterText := ""
 
-	if len(m.results) > 0 {
-		filterText = strings.ToLower(m.resultsFilterInput.Value())
-		for i, result := range m.results {
-			if filterText == "" || strings.Contains(strings.ToLower(result.content), filterText) {
-				style := normalStyle
-				if m.cursor == i {
-					style = selectedStyle
-				}
-				repoLine := urlStyle.Render(result.repo)
-				fileLine := infoStyle.Render("File: " + result.file)
-				wrappedCode := wrapText(result.content, m.viewport.Width-10)
-				highlightedCode := highlightCode(m.query, filterText, wrappedCode, result.language)
-				contentLine := style.Render(highlightedCode)
-				resultBox := lipgloss.JoinVertical(lipgloss.Left,
-					repoLine,
-					fileLine,
-					contentLine,
-				)
-				s.WriteString(resultStyle.Render(resultBox) + "\n\n")
-			}
-		}
+	if len(m.results) == 0 {
+		s.WriteString(infoStyle.Render("No results. Press 'q' to search again."))
+		return s.String()
 	}
 
-	if filterText != "" {
-		re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(filterText))
-		filtered := re.ReplaceAllStringFunc(s.String(), func(match string) string {
-			return filterStyle.Render(match)
-		})
+	filterText = strings.ToLower(m.filterInput.Value())
+	for i, result := range m.results {
+		if filterText != "" && !strings.Contains(strings.ToLower(result.ToFilterString()), filterText) {
+			continue
+		}
 
-		return filtered
+		style := normalStyle
+		if m.cursor == i {
+			style = selectedStyle
+		}
+		repoLine := urlStyle.Render(result.repo)
+		repoLine = highlightFilterText(repoLine, filterText)
+
+		fileLine := infoStyle.Render("File: " + result.file)
+		fileLine = highlightFilterText(fileLine, filterText)
+
+		codeText := ""
+		codeText = wrapText(result.content, m.viewport.Width-10)
+		codeText = highlightCode(codeText, result.language)
+		codeText = highlightGHQuery(codeText, m.query)
+		codeText = highlightFilterText(codeText, filterText)
+		codeText = style.Render(codeText)
+
+		resultBox := lipgloss.JoinVertical(lipgloss.Left,
+			repoLine,
+			fileLine,
+			codeText,
+		)
+		s.WriteString(resultStyle.Render(resultBox) + "\n\n")
+
 	}
 
 	return s.String()
@@ -370,7 +398,7 @@ func (m *Model) viewportContent() string {
 // TODO: still need to extract org out of this
 func (m *Model) search() tea.Msg {
 	// searchResp, githubResp, err := client.Search.Code(context.Background(), m.query+" org:aviva-verde", &github.SearchOptions{
-	searchResp, githubResp, err := m.searchInOrg(context.Background(), m.query+" org:aviva-verde", &github.SearchOptions{
+	searchResp, githubResp, err := m.searchInOrg(context.Background(), m.query+" org:"+m.wc.GithubOrg, &github.SearchOptions{
 		TextMatch: true,
 		ListOptions: github.ListOptions{
 			PerPage: 100,

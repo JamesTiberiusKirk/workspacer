@@ -13,9 +13,29 @@ import (
 
 type githubCodeSearchFunc func(ctx context.Context, query string, opts *github.SearchOptions) (*github.CodeSearchResult, *github.Response, error)
 
-func highlightCode(query, filterText, code, language string) string {
-	hightlightTokens := strings.Split(query, " ")
+func highlightFilterText(text, filter string) string {
+	if filter == "" {
+		return text
+	}
 
+	re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(filter))
+	text = re.ReplaceAllStringFunc(text, func(match string) string {
+		return filterStyle.Render(match)
+	})
+	return text
+}
+func highlightGHQuery(code, query string) string {
+	hightlightTokens := strings.Split(query, " ")
+	for _, token := range hightlightTokens {
+		re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(token))
+		code = re.ReplaceAllStringFunc(code, func(match string) string {
+			return highlightStyle.Render(match)
+		})
+	}
+	return code
+}
+
+func highlightCode(code, language string) string {
 	lexer := lexers.Get(language)
 	if lexer == nil {
 		lexer = lexers.Fallback
@@ -38,20 +58,6 @@ func highlightCode(query, filterText, code, language string) string {
 		return code
 	}
 	syntaxHightlited := buf.String()
-
-	for _, token := range hightlightTokens {
-		re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(token))
-		syntaxHightlited = re.ReplaceAllStringFunc(syntaxHightlited, func(match string) string {
-			return highlightStyle.Render(match)
-		})
-	}
-
-	// if filterText != "" {
-	// 	re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(filterText))
-	// 	syntaxHightlited = re.ReplaceAllStringFunc(syntaxHightlited, func(match string) string {
-	// 		return filterStyle.Render(match)
-	// 	})
-	// }
 
 	return syntaxHightlited
 }
@@ -87,4 +93,8 @@ type githubCodeSearchResult struct {
 	file     string
 	content  string
 	language string
+}
+
+func (r *githubCodeSearchResult) ToFilterString() string {
+	return r.repo + " | " + r.file + " | " + r.content
 }

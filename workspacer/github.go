@@ -61,7 +61,7 @@ func estimateLineNumbers(fragment *string, match *github.Match) (int, int) {
 	return startLine, endLine
 }
 
-func SearchGitGubInUserOrOrg(userOrOrg, search string) {
+func SearchGithubInUserOrOrg(userOrOrg, search string) {
 
 	// NOTE: Ok so this does work but i would need to provide
 

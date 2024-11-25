@@ -18,7 +18,7 @@ var (
 				Name:          "Aviva",
 				Prefix:        "av",
 				Path:          "~/Aviva",
-				OrgGithub:     "github.com/aviva-verde",
+				GithubOrg:     "aviva-verde",
 				SessionPreset: "default",
 			},
 		},

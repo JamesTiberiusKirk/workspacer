@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/JamesTiberiusKirk/workspacer/config"
 	"github.com/JamesTiberiusKirk/workspacer/ui/codesearch"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/go-github/v66/github"
@@ -18,7 +19,7 @@ func newGitHubClient() *github.Client {
 func main() {
 	gh := newGitHubClient()
 
-	p := tea.NewProgram(codesearch.New(gh.Search.Code))
+	p := tea.NewProgram(codesearch.New(config.DefaultGlobalConfig.Workspaces["av"], gh.Search.Code))
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v", err)
 		os.Exit(1)

@@ -32,7 +32,7 @@ type WorkspaceConfig struct {
 	Name          string          `json:"name"`
 	Prefix        string          `json:"prefix"`
 	Path          string          `json:"path"`
-	OrgGithub     string          `json:"org_github"`
+	GithubOrg     string          `json:"org_github"`
 	Projects      []ProjectConfig `json:"projects"`
 	SessionPreset string
 	Session       SessionConfig `json:"session_config"`
