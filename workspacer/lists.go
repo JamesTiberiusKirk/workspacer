@@ -8,10 +8,11 @@ import (
 	"github.com/JamesTiberiusKirk/workspacer/config"
 	"github.com/JamesTiberiusKirk/workspacer/log"
 	"github.com/JamesTiberiusKirk/workspacer/ui/list"
+	"github.com/JamesTiberiusKirk/workspacer/util"
 )
 
 func ChooseFromOpenWorkspaceProjectsAndSwitch(workspace string, workspaceConfig config.WorkspaceConfig, sessionPresets map[string]config.SessionConfig) {
-	openProjects := getOpenProjectsByWorkspace(workspace)
+	openProjects := util.GetOpenProjectsByWorkspace(workspace)
 	if len(openProjects) == 0 {
 		log.Info("No open projects in workspace %s", workspace)
 	}
@@ -35,14 +36,14 @@ func ChooseFromOpenWorkspaceProjectsAndSwitch(workspace string, workspaceConfig 
 }
 
 func ChoseProjectFromWorkspace(workspace string, wc config.WorkspaceConfig, extraOptions []list.Item) (string, string) {
-	if _, err := os.Stat(getWorkspacePath(wc)); os.IsNotExist(err) {
+	if _, err := os.Stat(util.GetWorkspacePath(wc)); os.IsNotExist(err) {
 		log.Error("workspace %s does not exist", workspace)
 		return "nochoise", ""
 	}
 
-	openProjects := getOpenProjectsByWorkspace(workspace)
+	openProjects := util.GetOpenProjectsByWorkspace(workspace)
 
-	path := getWorkspacePath(wc)
+	path := util.GetWorkspacePath(wc)
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		panic(err)
@@ -52,11 +53,11 @@ func ChoseProjectFromWorkspace(workspace string, wc config.WorkspaceConfig, extr
 	for _, e := range entries {
 		if e.IsDir() {
 			item := list.Item{Display: e.Name(), Value: "folder:" + e.Name(), Subtitle: "Folder"}
-			if hasGitSubfolder(filepath.Join(path, e.Name())) {
+			if util.HasGitSubfolder(filepath.Join(path, e.Name())) {
 				item.Subtitle = "Git Repo"
 			}
 
-			if contains(openProjects, e.Name()) {
+			if util.Contains(openProjects, e.Name()) {
 				item.Display = item.Display + " (Active)"
 			}
 

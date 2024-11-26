@@ -1,4 +1,4 @@
-package workspacer
+package util
 
 import (
 	"os"
@@ -10,7 +10,7 @@ import (
 	gotmux "github.com/jubnzv/go-tmux"
 )
 
-func getOpenProjectsByWorkspace(wsPrefix string) []string {
+func GetOpenProjectsByWorkspace(wsPrefix string) []string {
 	server := new(gotmux.Server)
 	sessions, err := server.ListSessions()
 	if err != nil {
@@ -29,7 +29,7 @@ func getOpenProjectsByWorkspace(wsPrefix string) []string {
 	return openProjects
 }
 
-func getWorkspacePath(wc config.WorkspaceConfig) string {
+func GetWorkspacePath(wc config.WorkspaceConfig) string {
 	if strings.HasPrefix(wc.Path, "~/") {
 		dirname, _ := os.UserHomeDir()
 		wc.Path = filepath.Join(dirname, wc.Path[2:])
@@ -38,7 +38,7 @@ func getWorkspacePath(wc config.WorkspaceConfig) string {
 	return wc.Path
 }
 
-func hasGitSubfolder(path string) bool {
+func HasGitSubfolder(path string) bool {
 	gitPath := filepath.Join(path, ".git")
 	info, err := os.Stat(gitPath)
 	if err != nil {
@@ -47,11 +47,24 @@ func hasGitSubfolder(path string) bool {
 	return info.IsDir()
 }
 
-func contains(arr []string, str string) bool {
+func Contains(arr []string, str string) bool {
 	for _, a := range arr {
 		if a == str {
 			return true
 		}
 	}
 	return false
+}
+
+func DoesProjectExist(wc config.WorkspaceConfig, project string) bool {
+	path := filepath.Join(GetWorkspacePath(wc), project)
+	s, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	if !s.IsDir() {
+		return false
+	}
+
+	return true
 }

@@ -3,10 +3,10 @@ package workspacer
 import (
 	"fmt"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/JamesTiberiusKirk/workspacer/config"
+	"github.com/JamesTiberiusKirk/workspacer/util"
 	gotmux "github.com/jubnzv/go-tmux"
 )
 
@@ -17,20 +17,28 @@ func StartOrSwitchToSession(
 	project string,
 ) {
 
-	// TODO: if project does not exist, see if we can clone it?
-
 	fileOption := ""
-	lineNumber := ""
+	extraVimCommands := ""
 	if strings.Contains(project, ":") {
 		split := strings.Split(project, ":")
 		project = split[0]
 		fileOption = split[1]
 		if len(split) > 2 {
-			lineNumber = split[2]
+			extraVimCommands = split[2]
 		}
 	}
 
-	sessionName := wsName + "-" + project
+	if !util.DoesProjectExist(wc, project) {
+		fmt.Printf("\n\nProject %s does not exist\n\n", project)
+		return
+	}
+
+	sessionName := project
+
+	if wc.Prefix != "" {
+		sessionName = wsName + "-" + sessionName
+	}
+
 	server := new(gotmux.Server)
 
 	// Check that the "example" session already exists.
@@ -57,7 +65,7 @@ func StartOrSwitchToSession(
 		return
 	}
 
-	path := filepath.Join(getWorkspacePath(wc), project)
+	path := filepath.Join(util.GetWorkspacePath(wc), project)
 
 	// TODO: check if the path is valid
 	// This is where the project will be cloned if config has been setup
@@ -78,7 +86,7 @@ func StartOrSwitchToSession(
 
 		window := gotmux.Window{
 			Id:     i + 1,
-			Name:   strconv.Itoa(i+1) + ": " + w.Name,
+			Name:   w.Name,
 			Layout: w.Layout,
 			Panes:  panes,
 		}
@@ -116,10 +124,15 @@ func StartOrSwitchToSession(
 			continue
 		}
 
-		if panesConfig[i].Command == "vi" && fileOption != "" {
-			panesConfig[i].Command = "vi ./" + fileOption
-		} else if panesConfig[i].Command == "vi" && fileOption != "" {
-			panesConfig[i].Command = "vi " + "+" + lineNumber + "|norm! zt" + " ./" + fileOption
+		if panesConfig[i].Command == "vi" ||
+			panesConfig[i].Command == "vim" ||
+			panesConfig[i].Command == "nvim" {
+			if fileOption != "" {
+				panesConfig[i].Command += " ./" + fileOption
+			}
+			if extraVimCommands != "" {
+				panesConfig[i].Command += " " + extraVimCommands
+			}
 		}
 
 		p.RunCommand(panesConfig[i].Command)

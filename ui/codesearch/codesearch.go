@@ -238,10 +238,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, textinput.Blink
 			case "enter":
 				m.startOrSwitchToSession(
-					m.wc.Name,
+					m.wc.Prefix,
 					m.wc,
 					m.sp,
-					strings.TrimPrefix(m.results[m.cursor].repo, m.wc.GithubOrg+"/"),
+					strings.TrimPrefix(m.results[m.cursor].repo, m.wc.GithubOrg+"/")+
+						":"+m.results[m.cursor].file+": -c '/"+m.query+"'",
 				)
 				return m, tea.Quit
 			}
