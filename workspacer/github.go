@@ -6,6 +6,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/JamesTiberiusKirk/workspacer/config"
+	"github.com/JamesTiberiusKirk/workspacer/ui/codesearch"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/go-github/v66/github"
 	"github.com/joho/godotenv"
 )
@@ -62,58 +65,18 @@ func estimateLineNumbers(fragment *string, match *github.Match) (int, int) {
 }
 
 func SearchGithubInUserOrOrg(userOrOrg, search string) {
-
-	// NOTE: Ok so this does work but i would need to provide
-
 	client := newGitHubClient()
-	// client.Search.Repositories(context.Background(), search, nil)
 
-	// i wanna do a global search only inside the user or org
-	searchResp, githubResp, err := client.Search.Code(context.Background(), search+" org:"+userOrOrg, &github.SearchOptions{TextMatch: true})
-	if err != nil {
+	p := tea.NewProgram(
+		codesearch.New(
+			config.DefaultGlobalConfig.Workspaces["av"],
+			config.DefaultGlobalConfig.SessionPresets,
+			client.Search.Code,
+			StartOrSwitchToSession,
+			search,
+		),
+	)
+	if _, err := p.Run(); err != nil {
 		panic(err)
-	}
-	if githubResp.StatusCode != 200 {
-		panic(githubResp.Status)
-	}
-	// for _, code := range searchResp.CodeResults {
-	// 	fmt.Println(code.Repository.Name)
-	// 	fmt.Printf("Repo: %s\n", *code.Repository.FullName)
-	// 	fmt.Printf("Path: %s\n", *code.Path)
-	// 	fmt.Printf("URL: %s\n", *code.HTMLURL)
-	// 	fmt.Printf("Text matches: %v\n", code.TextMatches)
-	// 	fmt.Printf("", *code.)
-	// }
-
-	fmt.Printf("Len: %d, Total: %d\n", len(searchResp.CodeResults), searchResp.GetTotal())
-
-	// b, err := json.MarshalIndent(searchResp, "", "  ")
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// fmt.Println(string(b))
-
-	for _, result := range searchResp.CodeResults {
-
-		if result.Repository.DefaultBranch == nil {
-			repo, _, err := client.Repositories.Get(context.Background(), *result.Repository.Owner.Login,
-				*result.Repository.Name)
-			if err != nil {
-				panic(err)
-			}
-			db := repo.GetDefaultBranch()
-			result.Repository.DefaultBranch = &db
-		}
-
-		fmt.Printf("File: %s\n", *result.Name)
-
-		for _, match := range result.TextMatches {
-			lb, le := estimateLineNumbers(match.Fragment, match.Matches[0])
-			blobURL := generateBlobURL(result, lb, le)
-			fmt.Printf("Blob URL: %s\n", blobURL)
-
-			fmt.Printf("  Match: \n%s\n", *match.Fragment)
-		}
-		fmt.Println()
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/JamesTiberiusKirk/workspacer/config"
@@ -49,18 +50,28 @@ func main() {
 	log.Debug("args: %v len(args):%d", args, len(args))
 
 	switch args[0] {
-	case "NC", "new_config":
-	case "C", "clone":
+	case "nc", "new_config":
+	case "c", "clone":
 		// TODO: get list of all repos in an org and allow the user to clone one
 		// check if the directory already exists and mark it as so in the list
 		log.Info("CLONE, to be implemented")
-	case "L", "list":
+	case "l", "list":
 		// TODO: implement tmux session list only for the workspace
 		log.Info("LIST, to be implemented")
-	case "S", "search":
+	case "s", "search":
 		// TODO: implement github arch
-		log.Info("SEARCH, to be implemented")
-	case "O", "open":
+
+		searchArgs := ""
+		if len(args) > 1 {
+			fmt.Println("Sorry this does not work yet")
+			return
+			// for _, arg := range args[1:] {
+			// 	searchArgs += arg + " "
+			// }
+		}
+
+		workspacer.SearchGithubInUserOrOrg(mc.Workspace, searchArgs)
+	case "o", "open":
 		workspacer.ChooseFromOpenWorkspaceProjectsAndSwitch(mc.Workspace,
 			config.DefaultGlobalConfig.Workspaces[mc.Workspace],
 			config.DefaultGlobalConfig.SessionPresets,

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/JamesTiberiusKirk/workspacer/config"
-	"github.com/JamesTiberiusKirk/workspacer/workspacer"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -26,6 +25,7 @@ import (
 // - [ ] Rework the selected sytles, maybe just make the border a different colour
 // - [ ] Fix row length so that it doesn't look odd
 // - [ ] Add loading spinner
+// - [ ] Get file numbers
 
 // BUG:
 // - [ ] filter input cursor does not blink
@@ -34,6 +34,7 @@ import (
 // - [ ] work on the partly functioning viewport selection scroll
 // - [ ] fix filtering not highlighting over the highlighted search terms
 // - [x] sometimes this still breaks the special terminal input "ctrl+c"
+// - [ ] fix the arg start search
 //	- NOTE: Seems like os.Exist is the culprit here....
 
 var (
@@ -106,12 +107,14 @@ type (
 )
 
 type Model struct {
-	searchInOrg githubCodeSearchFunc
+	searchInOrg            githubCodeSearchFunc
+	startOrSwitchToSession startOrSwitchToSessionFunc
 
 	searchInput textinput.Model
 	filterInput textinput.Model
 	viewport    viewport.Model
 
+	width, height      int
 	query              string
 	results            []githubCodeSearchResult
 	cursor             int
@@ -121,31 +124,48 @@ type Model struct {
 	visibleItemCount   int
 	state              inputState
 	clearFilterConfirm bool
+	startSearch        string
 
 	wc config.WorkspaceConfig
+	sp map[string]config.SessionConfig
 }
 
-func New(wc config.WorkspaceConfig, searchInOrg githubCodeSearchFunc) Model {
+func New(
+	wc config.WorkspaceConfig,
+	sp map[string]config.SessionConfig,
+	searchInOrg githubCodeSearchFunc,
+	startOrSwitchToSession startOrSwitchToSessionFunc,
+	argSearchString string,
+) Model {
 	ti := textinput.New()
 	ti.Placeholder = "Enter GitHub search query..."
-	ti.Focus()
-
 	ti.PromptStyle = lipgloss.NewStyle().Foreground(highlight)
 	ti.TextStyle = lipgloss.NewStyle().Foreground(special)
+
+	state := stateInput
+	if argSearchString != "" {
+		state = stateResults
+		ti.SetValue(argSearchString)
+	} else {
+		ti.Focus()
+	}
 
 	filterInput := textinput.New()
 	filterInput.Prompt = ""
 
 	return Model{
-		searchInOrg: searchInOrg,
+		searchInOrg:            searchInOrg,
+		startOrSwitchToSession: startOrSwitchToSession,
 
 		searchInput: ti,
 		filterInput: filterInput,
 		viewport:    viewport.New(0, 0),
 		itemHeight:  12, // Adjust based on your actual item height
-		state:       stateInput,
+		startSearch: argSearchString,
+		state:       state,
 
 		wc: wc,
+		sp: sp,
 	}
 }
 
@@ -155,6 +175,19 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+
+	if m.startSearch != "" {
+		m.searchInput.SetValue(m.startSearch)
+		m.query = m.startSearch
+		m.state = stateResults
+		m.startSearch = ""
+
+		// m.viewport.SetContent(m.viewportContent())
+		// m.viewport, cmd = m.viewport.Update(msg)
+		m.searchInput, cmd = m.searchInput.Update(msg)
+
+		return m, m.search
+	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -204,11 +237,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.filterInput.Focus()
 				return m, textinput.Blink
 			case "enter":
-				workspacer.StartOrSwitchToSession(
-					"av",
-					config.DefaultGlobalConfig.Workspaces["av"],
-					config.DefaultGlobalConfig.SessionPresets,
-					strings.TrimPrefix(m.results[m.cursor].repo, "aviva-verde/")+":"+m.results[m.cursor].file+":22",
+				m.startOrSwitchToSession(
+					m.wc.Name,
+					m.wc,
+					m.sp,
+					strings.TrimPrefix(m.results[m.cursor].repo, m.wc.GithubOrg+"/"),
 				)
 				return m, tea.Quit
 			}
@@ -247,6 +280,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		headerHeight := 4 // Adjust based on your header content
 		footerHeight := 4 // Adjust based on your footer content
+		m.width = msg.Width
+		m.height = msg.Height
 		m.viewport.Width = msg.Width - 2
 		m.viewport.Height = msg.Height - headerHeight - footerHeight
 		m.visibleItemCount = m.viewport.Height / m.itemHeight
@@ -269,8 +304,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	width, height := m.viewport.Width, m.viewport.Height
-
 	switch m.state {
 	case stateInput:
 		var s strings.Builder
@@ -282,12 +315,12 @@ func (m Model) View() string {
 			Foreground(special).
 			Italic(true)
 		titleBar := titleStyle.Render("GitHub Code Search: ", searchQueryStyle.Render(m.query))
-		footerBar := m.createStatusLine(width)
+		footerBar := m.createStatusLine()
 		mainContent := borderStyle.Render(m.viewport.View())
 		return lipgloss.JoinVertical(
 			lipgloss.Left,
 			titleBar,
-			lipgloss.NewStyle().Height(height-1).Render(mainContent),
+			lipgloss.NewStyle().Height(m.viewport.Height-1).Render(mainContent),
 			footerBar,
 		)
 	}
@@ -331,8 +364,8 @@ func (m *Model) updateCursor(direction int) {
 	m.cursor = newCursor
 }
 
-func (m *Model) createStatusLine(width int) string {
-	width = width - 2
+func (m *Model) createStatusLine() string {
+	width := m.width - 2
 	left := "Press ↑/↓ to navigate, q to search again, Ctrl+C to quit " + m.filterInput.View()
 	right := ""
 
@@ -341,7 +374,11 @@ func (m *Model) createStatusLine(width int) string {
 	right = lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render(right)
 
 	// Calculate remaining space for the center section
-	remainingSpace := width - lipgloss.Width(left) - lipgloss.Width(right)
+	remainingSpace := width - (lipgloss.Width(left) + lipgloss.Width(right))
+
+	if remainingSpace < 0 {
+		remainingSpace = 0
+	}
 	center := strings.Repeat(" ", remainingSpace)
 
 	return footerBarStyle.Render(lipgloss.JoinHorizontal(lipgloss.Left, left, center, right))
@@ -370,6 +407,7 @@ func (m *Model) viewportContent() string {
 		if m.cursor == i {
 			style = selectedStyle
 		}
+
 		repoLine := urlStyle.Render(result.repo)
 		repoLine = highlightFilterText(repoLine, filterText)
 
@@ -377,7 +415,7 @@ func (m *Model) viewportContent() string {
 		fileLine = highlightFilterText(fileLine, filterText)
 
 		codeText := ""
-		codeText = wrapText(result.content, m.viewport.Width-10)
+		codeText = wrapText(result.content, m.width-10)
 		codeText = highlightCode(codeText, result.language)
 		codeText = highlightGHQuery(codeText, m.query)
 		codeText = highlightFilterText(codeText, filterText)
@@ -395,7 +433,6 @@ func (m *Model) viewportContent() string {
 	return s.String()
 }
 
-// TODO: still need to extract org out of this
 func (m *Model) search() tea.Msg {
 	// searchResp, githubResp, err := client.Search.Code(context.Background(), m.query+" org:aviva-verde", &github.SearchOptions{
 	searchResp, githubResp, err := m.searchInOrg(context.Background(), m.query+" org:"+m.wc.GithubOrg, &github.SearchOptions{

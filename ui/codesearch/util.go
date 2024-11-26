@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/JamesTiberiusKirk/workspacer/config"
 	"github.com/alecthomas/chroma/formatters"
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/alecthomas/chroma/styles"
@@ -12,6 +13,7 @@ import (
 )
 
 type githubCodeSearchFunc func(ctx context.Context, query string, opts *github.SearchOptions) (*github.CodeSearchResult, *github.Response, error)
+type startOrSwitchToSessionFunc func(wsName string, wc config.WorkspaceConfig, presets map[string]config.SessionConfig, project string)
 
 func highlightFilterText(text, filter string) string {
 	if filter == "" {
