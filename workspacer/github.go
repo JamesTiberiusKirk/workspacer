@@ -10,15 +10,17 @@ import (
 	"github.com/JamesTiberiusKirk/workspacer/ui/codesearch"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/go-github/v66/github"
-	"github.com/joho/godotenv"
 )
 
-func newGitHubClient() *github.Client {
-	// add workspace to get the right token
-	// temp
-	_ = godotenv.Load()
+var ghClient *github.Client
 
-	return github.NewClient(nil).WithAuthToken(os.Getenv("GITHUB_AUTH"))
+func newGitHubClient() *github.Client {
+	if ghClient != nil {
+		return ghClient
+	}
+
+	ghClient = github.NewClient(nil).WithAuthToken(os.Getenv("GITHUB_AUTH"))
+	return ghClient
 }
 
 func generateBlobURL(result *github.CodeResult, lineBegin, lineEnd int) string {
@@ -65,11 +67,12 @@ func estimateLineNumbers(fragment *string, match *github.Match) (int, int) {
 }
 
 func SearchGithubInUserOrOrg(userOrOrg, search string) {
+	wc := config.DefaultGlobalConfig.Workspaces[userOrOrg]
 	client := newGitHubClient()
 
 	p := tea.NewProgram(
 		codesearch.New(
-			config.DefaultGlobalConfig.Workspaces["av"],
+			wc,
 			config.DefaultGlobalConfig.SessionPresets,
 			client.Search.Code,
 			StartOrSwitchToSession,
@@ -79,4 +82,61 @@ func SearchGithubInUserOrOrg(userOrOrg, search string) {
 	if _, err := p.Run(); err != nil {
 		panic(err)
 	}
+}
+
+func GetWorkFlowsStatus(workspace string, repo string, branches ...string) []string {
+	result := []string{}
+	for _, branch := range branches {
+		wc, ok := config.DefaultGlobalConfig.Workspaces[workspace]
+		if !ok {
+			continue
+		}
+		client := newGitHubClient()
+		owner := wc.GithubOrg
+
+		// Get the workflow runs
+		workflowRuns, _, err := client.Actions.ListWorkflowRunsByFileName(context.Background(), owner, repo, "deploy.yaml", &github.ListWorkflowRunsOptions{
+			Branch: branch,
+		})
+		if err != nil {
+			continue
+		}
+
+		if len(workflowRuns.WorkflowRuns) == 0 {
+			continue
+		}
+
+		// Get the latest run
+		latestRun := workflowRuns.WorkflowRuns[0]
+
+		emoji := "🔴"
+		if latestRun.GetConclusion() == "success" {
+			emoji = "🟢"
+		}
+
+		// todo: idk if this is the string
+		if latestRun.GetConclusion() == "in_progress" {
+			emoji = "🟡"
+		}
+
+		r := branch + " " + emoji
+		result = append(result, r)
+	}
+
+	return result
+}
+
+func GetOpenPullRequestsByBranch(ws config.WorkspaceConfig, project, branch string) ([]*github.PullRequest, error) {
+	client := newGitHubClient()
+	opts := &github.PullRequestListOptions{
+		State: "open",
+		Base:  branch,
+	}
+
+	prs, _, err := client.PullRequests.List(context.Background(), ws.GithubOrg, project, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return prs, nil
 }

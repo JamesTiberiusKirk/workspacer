@@ -29,7 +29,6 @@ import (
 
 // BUG:
 // - [ ] filter input cursor does not blink
-// - [ ] using the highlight style breaks the rest of the code highlighting
 // - [x] enabling the filder blanks the screen out, then existing brings back the normal screen with stuff in the input
 // - [ ] work on the partly functioning viewport selection scroll
 // - [ ] fix filtering not highlighting over the highlighted search terms

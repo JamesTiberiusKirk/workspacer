@@ -6,6 +6,7 @@ import (
 
 	"github.com/JamesTiberiusKirk/workspacer/config"
 	"github.com/JamesTiberiusKirk/workspacer/log"
+	"github.com/JamesTiberiusKirk/workspacer/util"
 	"github.com/JamesTiberiusKirk/workspacer/workspacer"
 )
 
@@ -20,21 +21,30 @@ func main() {
 	// if not debug complain
 
 	args := os.Args
+
+	switch args[1] {
+	case "h", "help":
+		fmt.Println("workspacer ...")
+		return
+	}
+
 	mc, args := config.ParseArgs(args)
 
 	log.Info("workspace: %s", mc.Workspace)
 
-	if len(args) == 0 {
-		if mc.Workspace == "" {
-			log.Error("no workspace provided")
-			return
-		}
+	util.LoadEnvFile(config.DefaultGlobalConfig.Workspaces[mc.Workspace])
 
-		workspaceConfig, ok := config.DefaultGlobalConfig.Workspaces[mc.Workspace]
-		if !ok {
-			log.Error("workspace %s not found", mc.Workspace)
-			return
-		}
+	if mc.Workspace == "" {
+		log.Error("no workspace provided")
+		return
+	}
+	workspaceConfig, ok := config.DefaultGlobalConfig.Workspaces[mc.Workspace]
+	if !ok {
+		log.Error("workspace %s not found", mc.Workspace)
+		return
+	}
+
+	if len(args) == 0 {
 
 		t, choise := workspacer.ChoseProjectFromWorkspace(mc.Workspace, workspaceConfig, nil)
 		switch t {
@@ -71,6 +81,34 @@ func main() {
 		}
 
 		workspacer.SearchGithubInUserOrOrg(mc.Workspace, searchArgs)
+	case "a", "actions":
+		mainBranch := util.GetGitMainBranch(workspaceConfig, args[1])
+
+		branch := util.GetProjectCurrentBranch(workspaceConfig, args[1])
+		branches := []string{mainBranch}
+
+		staging, prod := false, false
+		if util.DoesBranchExist(workspaceConfig, args[1], "staging") {
+			branches = append(branches, "staging")
+			staging = true
+		}
+
+		if util.DoesBranchExist(workspaceConfig, args[1], "production") {
+			branches = append(branches, "production")
+			prod = true
+		}
+
+		if branch != "" && branch != mainBranch && (branch != "staging" && staging) && (branch != "production" && prod) {
+			branches = append([]string{branch}, branches...)
+		}
+
+		fmt.Println("Branches: ", branches)
+
+		results := workspacer.GetWorkFlowsStatus(mc.Workspace, args[1], branches...)
+		for _, r := range results {
+			fmt.Println(r)
+		}
+
 	case "o", "open":
 		workspacer.ChooseFromOpenWorkspaceProjectsAndSwitch(mc.Workspace,
 			config.DefaultGlobalConfig.Workspaces[mc.Workspace],

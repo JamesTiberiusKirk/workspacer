@@ -116,27 +116,9 @@ func GetProjectPath(wc config.WorkspaceConfig, project string) string {
 	return projectPath
 }
 
-func DoesBranchExist(wc config.WorkspaceConfig, project, branch string) bool {
-	projectPath := GetProjectPath(wc, project)
-
-	gitOut, err := ExecCmd("git", "-C", projectPath, "remote", "show", "origin")
-	if err != nil {
-		return false
-	}
-
-	at := strings.Index(gitOut, "HEAD branch")
-	if at == -1 {
-		return false
-	}
-
-	if !strings.Contains(gitOut, branch) {
-		return false
-	}
-
-	return true
-}
-
 func GetGitMainBranch(wc config.WorkspaceConfig, project string) string {
+	//git remote show origin | sed -n '/HEAD branch/s/.*: //p'
+
 	projectPath := GetProjectPath(wc, project)
 
 	gitOut, err := ExecCmd("git", "-C", projectPath, "remote", "show", "origin")
@@ -155,7 +137,9 @@ func GetGitMainBranch(wc config.WorkspaceConfig, project string) string {
 	branch = strings.Split(branch, " ")[0]
 	branch = strings.TrimSpace(branch)
 
-	return branch
+	fmt.Printf("%+v\n", []string{branch})
+
+	return ""
 }
 
 func GetProjectCurrentBranch(wc config.WorkspaceConfig, project string) string {
