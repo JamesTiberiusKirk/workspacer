@@ -10,6 +10,30 @@ import (
 	gotmux "github.com/jubnzv/go-tmux"
 )
 
+func CloseAllSessionsInWorkspace(wc config.WorkspaceConfig) {
+	server := new(gotmux.Server)
+	sessions, err := server.ListSessions()
+	if err != nil {
+		// handle error
+		fmt.Println("error ", err.Error())
+	}
+
+	for _, s := range sessions {
+		if wc.Prefix == "" {
+			fmt.Println("prefix is empty")
+			return
+		}
+
+		if strings.HasPrefix(s.Name, wc.Prefix) {
+			err := server.KillSession(s.Name)
+			if err != nil {
+				// handle error
+				fmt.Println("error ", err.Error())
+			}
+		}
+	}
+}
+
 func StartOrSwitchToSession(
 	wsName string,
 	wc config.WorkspaceConfig,
@@ -41,28 +65,31 @@ func StartOrSwitchToSession(
 
 	server := new(gotmux.Server)
 
-	// Check that the "example" session already exists.
-	exists, err := server.HasSession(sessionName)
-	if err != nil {
-		fmt.Println(fmt.Errorf("Can't check '%s' session: %s", sessionName, err))
-		return
-	}
-
-	if exists {
-		sessions, err := server.ListSessions()
+	sessions, err := server.ListSessions()
+	if len(sessions) > 0 {
+		// Check that the "example" session already exists.
+		exists, err := server.HasSession(sessionName)
 		if err != nil {
-			// handle error
-			fmt.Println("error ", err.Error())
+			fmt.Println(fmt.Errorf("Can't check '%s' session: %s", sessionName, err))
+			return
 		}
 
-		for _, s := range sessions {
-			if s.Name != sessionName {
-				continue
+		if exists {
+			sessions, err := server.ListSessions()
+			if err != nil {
+				// handle error
+				fmt.Println("error ", err.Error())
 			}
-			s.AttachSession()
-			break
+
+			for _, s := range sessions {
+				if s.Name != sessionName {
+					continue
+				}
+				s.AttachSession()
+				break
+			}
+			return
 		}
-		return
 	}
 
 	path := filepath.Join(util.GetWorkspacePath(wc), project)

@@ -130,7 +130,7 @@ func GetOpenPullRequestsByBranch(ws config.WorkspaceConfig, project, branch stri
 	client := newGitHubClient()
 	opts := &github.PullRequestListOptions{
 		State: "open",
-		Base:  branch,
+		Head:  branch,
 	}
 
 	prs, _, err := client.PullRequests.List(context.Background(), ws.GithubOrg, project, opts)

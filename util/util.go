@@ -1,7 +1,6 @@
 package util
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,7 +19,6 @@ const (
 func LoadEnvFile(wc config.WorkspaceConfig) {
 	path := GetWorkspacePath(wc) + "/" + envFileName
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			panic(err)
@@ -29,7 +27,8 @@ func LoadEnvFile(wc config.WorkspaceConfig) {
 		if _, err := os.Stat(homeDir + "/" + envFileName); !os.IsNotExist(err) {
 			path = homeDir + "/" + envFileName
 		} else {
-			fmt.Println("No .workspace.env file found in workspace or home directory")
+			log.Debug("No .workspace.env file found in workspace or home directory")
+			return
 		}
 	}
 
@@ -37,7 +36,6 @@ func LoadEnvFile(wc config.WorkspaceConfig) {
 	if err != nil {
 		panic(err)
 	}
-
 }
 
 func GetOpenProjectsByWorkspace(wsPrefix string) []string {

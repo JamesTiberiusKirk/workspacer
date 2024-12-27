@@ -7,10 +7,11 @@ import (
 var (
 	// Example config and my personal config
 	DefaultGlobalConfig = GlobalUserConfig{
+		DefaultWorkspace: "ws",
 		Workspaces: map[string]WorkspaceConfig{
 			"ws": {
 				Name:          "Projects",
-				Prefix:        "",
+				Prefix:        "ws",
 				Path:          "~/Projects/",
 				SessionPreset: "default",
 			},

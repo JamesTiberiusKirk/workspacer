@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/JamesTiberiusKirk/workspacer/config"
 	"github.com/JamesTiberiusKirk/workspacer/log"
 	"github.com/JamesTiberiusKirk/workspacer/util"
 	"github.com/JamesTiberiusKirk/workspacer/workspacer"
+	"github.com/jubnzv/go-tmux"
 )
 
 type flags struct {
@@ -30,22 +32,43 @@ func main() {
 
 	mc, args := config.ParseArgs(args)
 
-	log.Info("workspace: %s", mc.Workspace)
+	switch mc.Workspace {
+	case "current":
+		name, err := tmux.GetAttachedSessionName()
+		if err != nil {
+			log.Error("could not get current tmux session")
+			return
+		}
 
-	util.LoadEnvFile(config.DefaultGlobalConfig.Workspaces[mc.Workspace])
+		if name == "" {
+			log.Error("no tmux session attached")
+			return
+		}
+
+		if strings.Contains(name, "-") {
+			mc.Workspace = strings.Split(name, "-")[0]
+		} else {
+			mc.Workspace = config.DefaultGlobalConfig.DefaultWorkspace
+		}
+	}
+
+	log.Debug("workspace: %s", mc.Workspace)
 
 	if mc.Workspace == "" {
 		log.Error("no workspace provided")
 		return
 	}
+
 	workspaceConfig, ok := config.DefaultGlobalConfig.Workspaces[mc.Workspace]
 	if !ok {
 		log.Error("workspace %s not found", mc.Workspace)
 		return
 	}
 
-	if len(args) == 0 {
+	util.LoadEnvFile(workspaceConfig)
+	log.Debug("env loaded")
 
+	if len(args) == 0 {
 		t, choise := workspacer.ChoseProjectFromWorkspace(mc.Workspace, workspaceConfig, nil)
 		switch t {
 		case "folder":
@@ -111,15 +134,21 @@ func main() {
 
 	case "o", "open":
 		workspacer.ChooseFromOpenWorkspaceProjectsAndSwitch(mc.Workspace,
-			config.DefaultGlobalConfig.Workspaces[mc.Workspace],
+			workspaceConfig,
 			config.DefaultGlobalConfig.SessionPresets,
 		)
 
+	case "CA", "close-all":
+		workspacer.CloseAllSessionsInWorkspace(workspaceConfig)
+
+	case "get-tmux-workspace-filter":
+		template := "#{m:%s-*,#{session_name}}"
+		fmt.Printf(template, mc.Workspace)
 	default:
 		// try and open the directory
 		workspacer.StartOrSwitchToSession(
 			mc.Workspace,
-			config.DefaultGlobalConfig.Workspaces[mc.Workspace],
+			workspaceConfig,
 			config.DefaultGlobalConfig.SessionPresets,
 			args[0],
 		)

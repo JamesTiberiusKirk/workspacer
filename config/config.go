@@ -63,10 +63,20 @@ func (c *SessionConfig) ListPanes() []PanesConfig {
 }
 
 type GlobalUserConfig struct {
-	Workspaces     map[string]WorkspaceConfig `json:"workspaces"`
-	SessionPresets map[string]SessionConfig   `json:"session_presets"`
-	GitPath        string                     `json:"git_path"`
-	GithubPath     string                     `json:"github_path"`
+	DefaultWorkspace string                     `json:"default_workspace"`
+	Workspaces       map[string]WorkspaceConfig `json:"workspaces"`
+	SessionPresets   map[string]SessionConfig   `json:"session_presets"`
+	GitPath          string                     `json:"git_path"`
+	GithubPath       string                     `json:"github_path"`
+}
+
+func (c *GlobalUserConfig) GetDefaultWorkspaceConf() (WorkspaceConfig, error) {
+	wc, ok := c.Workspaces[c.DefaultWorkspace]
+	if !ok {
+		return WorkspaceConfig{}, fmt.Errorf("Default workspace not found")
+	}
+
+	return wc, nil
 }
 
 func (c *GlobalUserConfig) IsValid() bool {
