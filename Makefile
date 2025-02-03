@@ -4,3 +4,6 @@ install:
 build:
 	go build -o ./bin/workspacer ./cmd/workspacer/
 
+test:
+	go test -race -v ./...
+

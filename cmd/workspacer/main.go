@@ -12,8 +12,16 @@ import (
 	"github.com/jubnzv/go-tmux"
 )
 
-type flags struct {
-	workspace string
+func printHelp() {
+	fmt.Printf(`workspacer - a tmux workspace manager with extras
+
+	Run with no parameters to use get project selector
+
+	Avaliable flags for base command:
+	-H, -help: print this help message
+	-W, -workspace: specify the workspace
+	-D, -debug: print debug messages
+`)
 }
 
 func main() {
@@ -23,16 +31,38 @@ func main() {
 	// if not debug complain
 
 	args := os.Args
-
-	switch args[1] {
-	case "h", "help":
-		fmt.Println("workspacer ...")
-		return
+	fmt.Println(args)
+	opts, errs := config.ParseArgs(args)
+	for _, err := range errs {
+		log.Error("%s", err.Error())
 	}
 
-	mc, args := config.ParseArgs(args)
+	if len(errs) > 0 {
+		os.Exit(1)
+	}
 
-	switch mc.Workspace {
+	if opts.Help {
+		printHelp()
+		os.Exit(0)
+	}
+
+	if opts.Debug {
+		log.LogLevel = log.LogLevelDebug
+	}
+	// filter flags out
+	as := []string{}
+	args = args[1:]
+	for _, a := range args {
+		if strings.HasPrefix(a, "-") {
+			continue
+		}
+
+		as = append(as, a)
+	}
+
+	args = as
+
+	switch opts.Workspace {
 	case "current":
 		name, err := tmux.GetAttachedSessionName()
 		if err != nil {
@@ -46,22 +76,22 @@ func main() {
 		}
 
 		if strings.Contains(name, "-") {
-			mc.Workspace = strings.Split(name, "-")[0]
+			opts.Workspace = strings.Split(name, "-")[0]
 		} else {
-			mc.Workspace = config.DefaultGlobalConfig.DefaultWorkspace
+			opts.Workspace = config.DefaultGlobalConfig.DefaultWorkspace
 		}
 	}
 
-	log.Debug("workspace: %s", mc.Workspace)
+	log.Debug("workspace: %s", opts.Workspace)
 
-	if mc.Workspace == "" {
+	if opts.Workspace == "" {
 		log.Error("no workspace provided")
 		return
 	}
 
-	workspaceConfig, ok := config.DefaultGlobalConfig.Workspaces[mc.Workspace]
+	workspaceConfig, ok := config.DefaultGlobalConfig.Workspaces[opts.Workspace]
 	if !ok {
-		log.Error("workspace %s not found", mc.Workspace)
+		log.Error("workspace %s not found", opts.Workspace)
 		return
 	}
 
@@ -69,7 +99,7 @@ func main() {
 	log.Debug("env loaded")
 
 	if len(args) == 0 {
-		t, choise := workspacer.ChoseProjectFromWorkspace(mc.Workspace, workspaceConfig, nil)
+		t, choise := workspacer.ChoseProjectFromWorkspace(opts.Workspace, workspaceConfig, nil)
 		switch t {
 		case "folder":
 			args = append([]string{choise}, args...)
@@ -103,7 +133,7 @@ func main() {
 			// }
 		}
 
-		workspacer.SearchGithubInUserOrOrg(mc.Workspace, searchArgs)
+		workspacer.SearchGithubInUserOrOrg(opts.Workspace, searchArgs)
 	case "a", "actions":
 		mainBranch := util.GetGitMainBranch(workspaceConfig, args[1])
 
@@ -127,13 +157,13 @@ func main() {
 
 		fmt.Println("Branches: ", branches)
 
-		results := workspacer.GetWorkFlowsStatus(mc.Workspace, args[1], branches...)
+		results := workspacer.GetWorkFlowsStatus(opts.Workspace, args[1], branches...)
 		for _, r := range results {
 			fmt.Println(r)
 		}
 
 	case "o", "open":
-		workspacer.ChooseFromOpenWorkspaceProjectsAndSwitch(mc.Workspace,
+		workspacer.ChooseFromOpenWorkspaceProjectsAndSwitch(opts.Workspace,
 			workspaceConfig,
 			config.DefaultGlobalConfig.SessionPresets,
 		)
@@ -143,11 +173,11 @@ func main() {
 
 	case "get-tmux-workspace-filter":
 		template := "#{m:%s-*,#{session_name}}"
-		fmt.Printf(template, mc.Workspace)
+		fmt.Printf(template, opts.Workspace)
 	default:
 		// try and open the directory
 		workspacer.StartOrSwitchToSession(
-			mc.Workspace,
+			opts.Workspace,
 			workspaceConfig,
 			config.DefaultGlobalConfig.SessionPresets,
 			args[0],
