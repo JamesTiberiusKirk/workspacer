@@ -62,6 +62,8 @@ func main() {
 
 	args = as
 
+	fmt.Println(args)
+
 	switch opts.Workspace {
 	case "current":
 		name, err := tmux.GetAttachedSessionName()
@@ -122,7 +124,7 @@ func main() {
 		// TODO: implement tmux session list only for the workspace
 		log.Info("LIST, to be implemented")
 	case "s", "search":
-		// TODO: implement github arch
+		// TODO: implement github search
 
 		searchArgs := ""
 		if len(args) > 1 {
