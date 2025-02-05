@@ -18,17 +18,18 @@ type SearchResult struct {
 }
 
 type Model struct {
-	searchTerms     []string
-	results         []SearchResult
-	filteredResults []SearchResult
-	cursor          int
-	selected        *SearchResult
-	viewport        viewport.Model
-	ready           bool
-	resultStarts    []int // Stores the starting line index of each result
-	itemHeights     []int // Stores the height of each result item
-	filterActive    bool
-	filterInput     string
+	searchTerms       []string
+	results           []SearchResult
+	filteredResults   []SearchResult
+	cursor            int
+	selected          *SearchResult
+	viewport          viewport.Model
+	ready             bool
+	resultStarts      []int // Stores the starting line index of each result
+	itemHeights       []int // Stores the height of each result item
+	filterActive      bool
+	filterInput       string
+	lastAppliedFilter string
 }
 
 func New(results []SearchResult, query string) Model {
@@ -75,10 +76,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.filterActive {
 			switch msg.String() {
-			case "esc", "ctrl+c":
+			case "ctrl+c":
+				return m, tea.Quit
+			case "esc":
 				m.filterActive = false
-				m.filterInput = ""
+				m.lastAppliedFilter = ""
 				m.filteredResults = m.results
+				m.cursor = 0
+				m.calcSizes()
+			case "enter":
+				m.filterActive = false
+				m.lastAppliedFilter = m.filterInput
+				m.filteredResults = m.filterResults(m.results, m.lastAppliedFilter)
 				m.cursor = 0
 				m.calcSizes()
 			case "backspace":
@@ -88,8 +97,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cursor = 0
 					m.calcSizes()
 				}
-			case "enter":
-				m.filterActive = false
 			default:
 				m.filterInput += msg.String()
 				m.filteredResults = m.filterResults(m.results, m.filterInput)
@@ -100,7 +107,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "/":
 				m.filterActive = true
-				m.filterInput = ""
+				m.filterInput = m.lastAppliedFilter
 			case "q", "ctrl+c":
 				return m, tea.Quit
 			case "up", "k":
@@ -233,6 +240,12 @@ func (m Model) View() string {
 func (m Model) renderResults(results []SearchResult, cursor int) string {
 	var s strings.Builder
 
+	// Determine which filter to use for highlighting
+	activeFilter := m.lastAppliedFilter
+	if m.filterActive {
+		activeFilter = m.filterInput
+	}
+
 	for i, result := range results {
 		cursorStr := " "
 		if cursor == i {
@@ -243,17 +256,17 @@ func (m Model) renderResults(results []SearchResult, cursor int) string {
 		fileStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Italic(true)
 		lineNumStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
-		highlightedRepo := highlightFilteredText(result.Repo, m.searchTerms, m.filterInput)
-		highlightedFilename := highlightFilteredText(result.Language+" "+result.Filename, m.searchTerms, m.filterInput)
+		highlightedRepo := highlightFilteredText(repoStyle.Render(result.Repo), m.searchTerms, activeFilter)
+		highlightedFilename := highlightFilteredText(fileStyle.Render(result.Language+" "+result.Filename), m.searchTerms, activeFilter)
 
-		s.WriteString(fmt.Sprintf("%s %s\n", cursorStr, repoStyle.Render(highlightedRepo)))
+		s.WriteString(fmt.Sprintf("%s %s\n", cursorStr, highlightedRepo))
 		s.WriteString(fmt.Sprintf("  %s:%s\n",
-			fileStyle.Render(highlightedFilename),
+			highlightedFilename,
 			lineNumStyle.Render(fmt.Sprintf("%d", result.LineNum)),
 		))
 
 		highlightedSnippet, _ := highlightCode(result.Snippet, result.Language)
-		highlightedSnippet = highlightFilteredText(highlightedSnippet, m.searchTerms, m.filterInput)
+		highlightedSnippet = highlightFilteredText(highlightedSnippet, m.searchTerms, activeFilter)
 		snippetLines := strings.Split(highlightedSnippet, "\n")
 		for _, line := range snippetLines {
 			s.WriteString(fmt.Sprintf("  %s\n", line))

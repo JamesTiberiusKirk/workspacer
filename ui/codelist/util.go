@@ -22,24 +22,90 @@ var (
 				Bold(true)
 )
 
+type styledSegment struct {
+	text  string
+	style string
+}
+
 func highlightFilteredText(text string, searchTerms []string, filterText string) string {
-	// First, highlight search terms
+	// Split the text into styled segments
+	segments := splitStyled(text)
+
+	// Highlight search terms
 	for _, term := range searchTerms {
-		re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(term))
-		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			return highlightStyle.Render(match)
-		})
+		segments = highlightSegments(segments, term, highlightStyle)
 	}
 
-	// Then, highlight filter text
+	// Highlight filter text
 	if filterText != "" {
-		re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(filterText))
-		text = re.ReplaceAllStringFunc(text, func(match string) string {
-			return filterHighlightStyle.Render(match)
-		})
+		segments = highlightSegments(segments, filterText, filterHighlightStyle)
 	}
 
-	return text
+	// Reconstruct the text
+	return joinSegments(segments)
+}
+
+func splitStyled(text string) []styledSegment {
+	var segments []styledSegment
+	var currentStyle, currentText strings.Builder
+	inStyle := false
+
+	for _, r := range text {
+		if r == '\x1b' {
+			if currentText.Len() > 0 {
+				segments = append(segments, styledSegment{currentText.String(), currentStyle.String()})
+				currentText.Reset()
+			}
+			currentStyle.Reset()
+			currentStyle.WriteRune(r)
+			inStyle = true
+		} else if inStyle {
+			currentStyle.WriteRune(r)
+			if r == 'm' {
+				inStyle = false
+			}
+		} else {
+			currentText.WriteRune(r)
+		}
+	}
+
+	if currentText.Len() > 0 {
+		segments = append(segments, styledSegment{currentText.String(), currentStyle.String()})
+	}
+
+	return segments
+}
+
+func highlightSegments(segments []styledSegment, term string, highlightStyle lipgloss.Style) []styledSegment {
+	var result []styledSegment
+	re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(term))
+
+	for _, seg := range segments {
+		indices := re.FindAllStringIndex(seg.text, -1)
+		lastIndex := 0
+		for _, idx := range indices {
+			if idx[0] > lastIndex {
+				result = append(result, styledSegment{seg.text[lastIndex:idx[0]], seg.style})
+			}
+			highlightedText := highlightStyle.Render(seg.text[idx[0]:idx[1]])
+			result = append(result, styledSegment{highlightedText, ""})
+			lastIndex = idx[1]
+		}
+		if lastIndex < len(seg.text) {
+			result = append(result, styledSegment{seg.text[lastIndex:], seg.style})
+		}
+	}
+
+	return result
+}
+
+func joinSegments(segments []styledSegment) string {
+	var result strings.Builder
+	for _, seg := range segments {
+		result.WriteString(seg.style)
+		result.WriteString(seg.text)
+	}
+	return result.String()
 }
 
 func highlightCode(code, language string) (string, []int) {
@@ -74,51 +140,6 @@ func highlightCode(code, language string) (string, []int) {
 	}
 
 	return highlightedCode, ansiPositions
-}
-
-func highlightSearchTerms(code string, searchTerms []string) string {
-	type segment struct {
-		text   string
-		isANSI bool
-	}
-
-	// Split the code into ANSI and non-ANSI segments
-	var segments []segment
-	ansiRegex := regexp.MustCompile("\x1b\\[[0-9;]*m")
-	indices := ansiRegex.FindAllStringIndex(code, -1)
-	lastIndex := 0
-	for _, idx := range indices {
-		if idx[0] > lastIndex {
-			segments = append(segments, segment{code[lastIndex:idx[0]], false})
-		}
-		segments = append(segments, segment{code[idx[0]:idx[1]], true})
-		lastIndex = idx[1]
-	}
-	if lastIndex < len(code) {
-		segments = append(segments, segment{code[lastIndex:], false})
-	}
-
-	// Highlight search terms in non-ANSI segments
-	for i, seg := range segments {
-		if seg.isANSI {
-			continue
-		}
-		for _, term := range searchTerms {
-			re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(term))
-			seg.text = re.ReplaceAllStringFunc(seg.text, func(match string) string {
-				return highlightStyle.Render(match)
-			})
-		}
-		segments[i] = seg
-	}
-
-	// Reconstruct the highlighted code
-	var result strings.Builder
-	for _, seg := range segments {
-		result.WriteString(seg.text)
-	}
-
-	return result.String()
 }
 
 func wrapText(text string, width int) string {

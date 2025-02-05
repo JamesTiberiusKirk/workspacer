@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	p := tea.NewProgram(codelist.New(data.Results, "repo"), tea.WithAltScreen())
+	p := tea.NewProgram(codelist.New(data.Results, "complex exa uti"), tea.WithAltScreen())
 
 	m, err := p.Run()
 	if err != nil {
