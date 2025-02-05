@@ -16,10 +16,15 @@ var ghClient *github.Client
 
 func newGitHubClient() *github.Client {
 	if ghClient != nil {
+		fmt.Println("Returning existing client")
 		return ghClient
 	}
-
-	ghClient = github.NewClient(nil).WithAuthToken(os.Getenv("GITHUB_AUTH"))
+	ghAuth := os.Getenv("GITHUB_AUTH")
+	if ghAuth != "" {
+		ghClient = github.NewClient(nil).WithAuthToken(ghAuth)
+	} else {
+		ghClient = github.NewClient(nil)
+	}
 	return ghClient
 }
 

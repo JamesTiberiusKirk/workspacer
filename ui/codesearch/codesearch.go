@@ -410,23 +410,25 @@ func (m *Model) viewportContent() string {
 
 		repoLine := urlStyle.Render(result.repo)
 		repoLine = highlightFilterText(repoLine, filterText)
+		repoLine = highlightGHQuery(repoLine, m.query)
 
 		fileLine := infoStyle.Render("File: " + result.file)
 		fileLine = highlightFilterText(fileLine, filterText)
+		fileLine = highlightGHQuery(fileLine, m.query)
 
 		codeText := ""
 		codeText = wrapText(result.content, m.width-10)
 		codeText = highlightCode(codeText, result.language)
-		codeText = highlightGHQuery(codeText, m.query)
 		codeText = highlightFilterText(codeText, filterText)
-		codeText = style.Render(codeText)
+		codeText = highlightGHQuery(codeText, m.query)
+		// codeText = style.Render(codeText)
 
 		resultBox := lipgloss.JoinVertical(lipgloss.Left,
 			repoLine,
 			fileLine,
 			codeText,
 		)
-		s.WriteString(resultStyle.Render(resultBox) + "\n\n")
+		s.WriteString(style.Render(resultStyle.Render(resultBox)) + "\n\n")
 
 	}
 

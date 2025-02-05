@@ -1,4 +1,4 @@
-package util
+package codelist
 
 import (
 	"regexp"
@@ -12,12 +12,37 @@ import (
 
 var (
 	highlightStyle = lipgloss.NewStyle().
-		Background(lipgloss.Color("205")). // Pink background
-		Foreground(lipgloss.Color("#ffffff")).
-		Bold(true)
+			Background(lipgloss.Color("205")). // Pink background
+			Foreground(lipgloss.Color("#ffffff")).
+			Bold(true)
+
+	filterHighlightStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("#FF0000")).
+				Foreground(lipgloss.Color("#FFFFFF")).
+				Bold(true)
 )
 
-func HighlightCode(code, language string) (string, []int) {
+func highlightFilteredText(text string, searchTerms []string, filterText string) string {
+	// First, highlight search terms
+	for _, term := range searchTerms {
+		re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(term))
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			return highlightStyle.Render(match)
+		})
+	}
+
+	// Then, highlight filter text
+	if filterText != "" {
+		re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(filterText))
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			return filterHighlightStyle.Render(match)
+		})
+	}
+
+	return text
+}
+
+func highlightCode(code, language string) (string, []int) {
 	lexer := lexers.Get(language)
 	if lexer == nil {
 		lexer = lexers.Fallback
@@ -51,7 +76,7 @@ func HighlightCode(code, language string) (string, []int) {
 	return highlightedCode, ansiPositions
 }
 
-func HighlightSearchTerms(code string, searchTerms []string) string {
+func highlightSearchTerms(code string, searchTerms []string) string {
 	type segment struct {
 		text   string
 		isANSI bool
@@ -96,7 +121,7 @@ func HighlightSearchTerms(code string, searchTerms []string) string {
 	return result.String()
 }
 
-func WrapText(text string, width int) string {
+func wrapText(text string, width int) string {
 	lines := strings.Split(text, "\n")
 	var wrappedLines []string
 

@@ -1,14 +1,8 @@
 package data
 
-type SearchResult struct {
-	Language string
-	Repo     string
-	Filename string
-	Snippet  string
-	LineNum  int
-}
+import "github.com/JamesTiberiusKirk/workspacer/ui/codelist"
 
-var Results = []SearchResult{
+var Results = []codelist.SearchResult{
 	{
 		Language: "Go",
 		Repo:     "example/repo1",

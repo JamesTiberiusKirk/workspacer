@@ -24,15 +24,19 @@ func highlightFilterText(text, filter string) string {
 	text = re.ReplaceAllStringFunc(text, func(match string) string {
 		return filterStyle.Render(match)
 	})
+	// text = strings.Replace(text, filter, filterStyle.Render(text), 0)
+
 	return text
 }
+
 func highlightGHQuery(code, query string) string {
 	hightlightTokens := strings.Split(query, " ")
 	for _, token := range hightlightTokens {
-		re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(token))
-		code = re.ReplaceAllStringFunc(code, func(match string) string {
-			return highlightStyle.Render(match)
-		})
+		// re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(token))
+		// code = re.ReplaceAllStringFunc(code, func(match string) string {
+		// 	return highlightStyle.Render(match)
+		// })
+		code = strings.Replace(code, token, highlightStyle.Render(token), 0)
 	}
 	return code
 }

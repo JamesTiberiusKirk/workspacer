@@ -14,6 +14,7 @@ var (
 				Prefix:        "ws",
 				Path:          "~/Projects/",
 				SessionPreset: "default",
+				GithubOrg:     "JamesTiberiusKirk",
 			},
 			"av": {
 				Name:          "Aviva",

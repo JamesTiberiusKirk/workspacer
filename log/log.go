@@ -1,7 +1,6 @@
 package log
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -27,7 +26,7 @@ func addNewLineIfMissing(fmtString string) string {
 
 func printf(fmtString string, args ...interface{}) {
 	fmtString = addNewLineIfMissing(fmtString)
-	fmt.Printf(fmtString, args...)
+	printf(fmtString, args...)
 }
 
 func Info(fmtString string, args ...interface{}) {
