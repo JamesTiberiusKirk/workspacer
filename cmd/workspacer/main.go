@@ -124,15 +124,11 @@ func main() {
 		// TODO: implement tmux session list only for the workspace
 		log.Info("LIST, to be implemented")
 	case "s", "search":
-		// TODO: implement github search
-
 		searchArgs := ""
 		if len(args) > 1 {
-			fmt.Println("Sorry this does not work yet")
-			return
-			// for _, arg := range args[1:] {
-			// 	searchArgs += arg + " "
-			// }
+			for _, arg := range args[1:] {
+				searchArgs += arg + " "
+			}
 		}
 
 		workspacer.SearchGithubInUserOrOrg(opts.Workspace, searchArgs)

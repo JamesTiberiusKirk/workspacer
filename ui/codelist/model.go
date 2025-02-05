@@ -240,21 +240,20 @@ func (m Model) View() string {
 func (m Model) renderResults(results []SearchResult, cursor int) string {
 	var s strings.Builder
 
-	// Determine which filter to use for highlighting
 	activeFilter := m.lastAppliedFilter
 	if m.filterActive {
 		activeFilter = m.filterInput
 	}
+
+	repoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Bold(true)
+	fileStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Italic(true)
+	lineNumStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
 	for i, result := range results {
 		cursorStr := " "
 		if cursor == i {
 			cursorStr = ">"
 		}
-
-		repoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Bold(true)
-		fileStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Italic(true)
-		lineNumStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
 		highlightedRepo := highlightFilteredText(repoStyle.Render(result.Repo), m.searchTerms, activeFilter)
 		highlightedFilename := highlightFilteredText(fileStyle.Render(result.Language+" "+result.Filename), m.searchTerms, activeFilter)
@@ -267,12 +266,8 @@ func (m Model) renderResults(results []SearchResult, cursor int) string {
 
 		highlightedSnippet, _ := highlightCode(result.Snippet, result.Language)
 		highlightedSnippet = highlightFilteredText(highlightedSnippet, m.searchTerms, activeFilter)
-		snippetLines := strings.Split(highlightedSnippet, "\n")
-		for _, line := range snippetLines {
-			s.WriteString(fmt.Sprintf("  %s\n", line))
-		}
-
-		s.WriteString("\n")
+		s.WriteString(highlightedSnippet)
+		s.WriteString("\n\n")
 	}
 
 	return s.String()

@@ -28,21 +28,29 @@ type styledSegment struct {
 }
 
 func highlightFilteredText(text string, searchTerms []string, filterText string) string {
-	// Split the text into styled segments
 	segments := splitStyled(text)
 
-	// Highlight search terms
 	for _, term := range searchTerms {
-		segments = highlightSegments(segments, term, highlightStyle)
+		segments = highlightSegments(segments, term, lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true), false)
 	}
 
-	// Highlight filter text
 	if filterText != "" {
-		segments = highlightSegments(segments, filterText, filterHighlightStyle)
+		segments = highlightSegments(segments, filterText, lipgloss.NewStyle().Foreground(lipgloss.Color("red")).Bold(true), true)
 	}
 
-	// Reconstruct the text
-	return joinSegments(segments)
+	return lipgloss.JoinHorizontal(lipgloss.Top, joinSegments(segments)...)
+}
+
+func joinSegments(segments []styledSegment) []string {
+	var result []string
+	for _, seg := range segments {
+		if seg.style != "" {
+			result = append(result, seg.style+seg.text)
+		} else {
+			result = append(result, seg.text)
+		}
+	}
+	return result
 }
 
 func splitStyled(text string) []styledSegment {
@@ -76,11 +84,16 @@ func splitStyled(text string) []styledSegment {
 	return segments
 }
 
-func highlightSegments(segments []styledSegment, term string, highlightStyle lipgloss.Style) []styledSegment {
+func highlightSegments(segments []styledSegment, term string, highlightStyle lipgloss.Style, isFilter bool) []styledSegment {
 	var result []styledSegment
 	re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(term))
 
 	for _, seg := range segments {
+		if seg.style != "" && isFilter {
+			result = append(result, seg)
+			continue
+		}
+
 		indices := re.FindAllStringIndex(seg.text, -1)
 		lastIndex := 0
 		for _, idx := range indices {
@@ -97,15 +110,6 @@ func highlightSegments(segments []styledSegment, term string, highlightStyle lip
 	}
 
 	return result
-}
-
-func joinSegments(segments []styledSegment) string {
-	var result strings.Builder
-	for _, seg := range segments {
-		result.WriteString(seg.style)
-		result.WriteString(seg.text)
-	}
-	return result.String()
 }
 
 func highlightCode(code, language string) (string, []int) {

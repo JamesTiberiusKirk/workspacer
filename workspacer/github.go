@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/JamesTiberiusKirk/workspacer/config"
-	"github.com/JamesTiberiusKirk/workspacer/ui/codesearch"
+	"github.com/JamesTiberiusKirk/workspacer/log"
+	"github.com/JamesTiberiusKirk/workspacer/ui/codelist"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/go-github/v66/github"
 )
@@ -75,17 +77,50 @@ func SearchGithubInUserOrOrg(userOrOrg, search string) {
 	wc := config.DefaultGlobalConfig.Workspaces[userOrOrg]
 	client := newGitHubClient()
 
-	p := tea.NewProgram(
-		codesearch.New(
-			wc,
-			config.DefaultGlobalConfig.SessionPresets,
-			client.Search.Code,
-			StartOrSwitchToSession,
-			search,
-		),
-	)
-	if _, err := p.Run(); err != nil {
-		panic(err)
+	searchResp, githubResp, err := client.Search.Code(context.Background(), search+" org:"+wc.GithubOrg, &github.SearchOptions{
+		TextMatch: true,
+		ListOptions: github.ListOptions{
+			PerPage: 100,
+		},
+	})
+	if err != nil {
+		log.Info("Unable to do code search on github: %s", err.Error())
+		return
+	}
+	if githubResp.StatusCode != 200 {
+		log.Info("Non 200 status code")
+		return
+	}
+
+	searchResults := []codelist.SearchResult{}
+	for _, result := range searchResp.CodeResults {
+		language := ""
+		if result.Path != nil {
+			language = strings.TrimPrefix(filepath.Ext(*result.Path), ".")
+		}
+
+		searchResults = append(searchResults, codelist.SearchResult{
+			Repo:     *result.Repository.FullName,
+			Filename: *result.Path,
+			Snippet:  *result.TextMatches[0].Fragment,
+			Language: language,
+		})
+	}
+
+	p := tea.NewProgram(codelist.New(searchResults[:10], search))
+	m, err := p.Run()
+	if err != nil {
+		fmt.Printf("Error: %v", err)
+		return
+	}
+
+	if m, ok := m.(codelist.Model); ok {
+		selected := m.Selected()
+		if selected == nil {
+			fmt.Println("No selection")
+			return
+		}
+		fmt.Printf("Selected: %s - %s\n%s\n", selected.Repo, selected.Filename, selected.Snippet)
 	}
 }
 
