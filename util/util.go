@@ -42,7 +42,8 @@ func GetOpenProjectsByWorkspace(wsPrefix string) []string {
 	server := new(gotmux.Server)
 	sessions, err := server.ListSessions()
 	if err != nil {
-		log.Error("could not get tmux sessions: %s", err.Error())
+		log.Error("could not get tmux sessions: %s\n",
+			err.Error())
 		return []string{}
 	}
 

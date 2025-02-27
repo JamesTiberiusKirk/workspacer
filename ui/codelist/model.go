@@ -139,7 +139,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ensureCursorVisible()
 	}
 
-	m.viewport.SetContent(m.renderResults(m.filteredResults, m.cursor))
+	m.viewport.SetContent(m.renderResults())
 	m.viewport, cmd = m.viewportUpdate(msg)
 	return m, cmd
 }
@@ -237,26 +237,26 @@ func (m Model) View() string {
 	return fmt.Sprintf("%s\n\n%s\n\n%s", header, m.viewport.View(), footer)
 }
 
-func (m Model) renderResults(results []SearchResult, cursor int) string {
+func (m Model) renderResults() string {
 	var s strings.Builder
 
-	activeFilter := m.lastAppliedFilter
-	if m.filterActive {
-		activeFilter = m.filterInput
-	}
+	// activeFilter := m.lastAppliedFilter
+	// if m.filterActive {
+	// 	activeFilter = m.filterInput
+	// }
 
 	repoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Bold(true)
 	fileStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Italic(true)
 	lineNumStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
-	for i, result := range results {
+	for i, result := range m.filteredResults {
 		cursorStr := " "
-		if cursor == i {
+		if m.cursor == i {
 			cursorStr = ">"
 		}
 
-		highlightedRepo := highlightFilteredText(repoStyle.Render(result.Repo), m.searchTerms, activeFilter)
-		highlightedFilename := highlightFilteredText(fileStyle.Render(result.Language+" "+result.Filename), m.searchTerms, activeFilter)
+		highlightedRepo := repoStyle.Render(result.Repo)
+		highlightedFilename := fileStyle.Render(result.Language + " " + result.Filename)
 
 		s.WriteString(fmt.Sprintf("%s %s\n", cursorStr, highlightedRepo))
 		s.WriteString(fmt.Sprintf("  %s:%s\n",
@@ -264,11 +264,16 @@ func (m Model) renderResults(results []SearchResult, cursor int) string {
 			lineNumStyle.Render(fmt.Sprintf("%d", result.LineNum)),
 		))
 
-		highlightedSnippet, _ := highlightCode(result.Snippet, result.Language)
-		highlightedSnippet = highlightFilteredText(highlightedSnippet, m.searchTerms, activeFilter)
+		highlightedSnippet := result.Snippet
+		highlightedSnippet = highlightCode(result.Snippet, result.Language)
+		// highlightedSnippet = highlightWords(highlightedSnippet, m.searchTerms, highlightStyle)
+		highlightedSnippet = highlightWords2(highlightedSnippet, m.searchTerms, lipgloss.NewStyle().Background(lipgloss.Color("205")).Foreground(lipgloss.Color("0")))
+		// highlightedSnippet = highlightFilteredText(highlightedSnippet, m.searchTerms, activeFilter)
+
 		s.WriteString(highlightedSnippet)
 		s.WriteString("\n\n")
 	}
 
+	// return highlightFilteredText(s.String(), m.searchTerms, activeFilter)
 	return s.String()
 }

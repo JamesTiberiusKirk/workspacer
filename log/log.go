@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -24,35 +25,35 @@ func addNewLineIfMissing(fmtString string) string {
 	return fmtString
 }
 
-func printf(fmtString string, args ...interface{}) {
+func customPrintF(fmtString string, args ...interface{}) {
 	fmtString = addNewLineIfMissing(fmtString)
-	printf(fmtString, args...)
+	fmt.Printf(fmtString, args...)
 }
 
 func Info(fmtString string, args ...interface{}) {
 	if LogLevel < LogLevelInfo {
 		return
 	}
-	printf(fmtString, args...)
+	customPrintF(fmtString, args...)
 }
 
 func Error(fmtString string, args ...interface{}) {
 	if LogLevel < LogLevelQuiet {
 		return
 	}
-	printf("[ERROR]: "+fmtString, args...)
+	customPrintF("[ERROR]: "+fmtString, args...)
 }
 
 func Warn(fmtString string, args ...interface{}) {
 	if LogLevel < LogLevelQuiet {
 		return
 	}
-	printf(fmtString, args...)
+	customPrintF(fmtString, args...)
 }
 
 func Debug(fmtString string, args ...interface{}) {
 	if LogLevel < LogLevelDebug {
 		return
 	}
-	printf("[DEBUG]: "+fmtString, args...)
+	customPrintF("[DEBUG]: "+fmtString, args...)
 }

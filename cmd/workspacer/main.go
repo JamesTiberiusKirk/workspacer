@@ -101,6 +101,7 @@ func main() {
 	log.Debug("env loaded")
 
 	if len(args) == 0 {
+		log.Info("TEST")
 		t, choise := workspacer.ChoseProjectFromWorkspace(opts.Workspace, workspaceConfig, nil)
 		switch t {
 		case "folder":
