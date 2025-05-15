@@ -23,10 +23,22 @@ var (
 				Path:          "~/Aviva/",
 				IsOrg:         true,
 				GithubOrg:     "aviva-verde",
-				SessionPreset: "default",
+				SessionPreset: "default-mac",
 			},
 		},
 		SessionPresets: map[string]SessionConfig{
+			"default-mac": {
+				Windows: []WindowConfig{
+					{
+						Name:   "nvim",
+						Layout: gotmux.LayoutMainVertical,
+						Panes: []PanesConfig{
+							{Command: "nvim"},
+							{Command: "git diff --quiet && git diff --cached --quiet && git pull"},
+						},
+					},
+				},
+			},
 			"default": {
 				Windows: []WindowConfig{
 					{
