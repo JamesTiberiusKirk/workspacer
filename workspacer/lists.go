@@ -9,7 +9,6 @@ import (
 	"github.com/JamesTiberiusKirk/workspacer/log"
 	"github.com/JamesTiberiusKirk/workspacer/ui/list"
 	"github.com/JamesTiberiusKirk/workspacer/util"
-	"github.com/google/go-github/v66/github"
 )
 
 func ChooseFromOpenWorkspaceProjectsAndSwitch(workspace string, workspaceConfig config.WorkspaceConfig, sessionPresets map[string]config.SessionConfig) {
@@ -36,10 +35,10 @@ func ChooseFromOpenWorkspaceProjectsAndSwitch(workspace string, workspaceConfig 
 	return
 }
 
-func removeRepoFromArray(repos []*github.Repository, name string) []*github.Repository {
-	res := []*github.Repository{}
+func removeRepoFromArray(repos []string, name string) []string {
+	res := []string{}
 	for _, r := range repos {
-		if *r.Name == name {
+		if r == name {
 			continue
 		}
 		res = append(res, r)
@@ -62,7 +61,7 @@ func ChoseProjectFromWorkspace(workspace string, wc config.WorkspaceConfig, extr
 		panic(err)
 	}
 
-	remoteRepos, err := GetReposByOrg(wc.GithubOrg, wc.IsOrg)
+	remoteRepos, err := GetRepoNames(wc.GithubOrg, wc.IsOrg)
 	if err != nil {
 		panic(err)
 	}
@@ -88,8 +87,8 @@ func ChoseProjectFromWorkspace(workspace string, wc config.WorkspaceConfig, extr
 
 	for _, remoteRepo := range remoteRepos {
 		folders = append(folders, list.Item{
-			Display:  *remoteRepo.Name,
-			Value:    "git:" + *remoteRepo.Name,
+			Display:  remoteRepo,
+			Value:    "git:" + remoteRepo,
 			Subtitle: "Clone From GitHub",
 		})
 	}

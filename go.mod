@@ -15,6 +15,7 @@ require (
 	github.com/jubnzv/go-tmux v0.0.0-20240326171704-84199b541a20
 	github.com/rivo/tview v0.0.0-20241227133733-17b7edb88c57
 	github.com/sahilm/fuzzy v0.1.1
+	github.com/shurcooL/githubv4 v0.0.0-20240727222349-48295856cce7
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/oauth2 v0.30.0
 )
@@ -38,6 +39,7 @@ require (
 	github.com/muesli/termenv v0.15.2 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/shurcooL/graphql v0.0.0-20230722043721-ed46e5a46466 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/term v0.17.0 // indirect

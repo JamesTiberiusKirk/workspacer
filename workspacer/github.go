@@ -12,6 +12,8 @@ import (
 	"github.com/JamesTiberiusKirk/workspacer/ui/codelist"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/go-github/v66/github"
+	"github.com/shurcooL/githubv4"
+	"golang.org/x/oauth2"
 )
 
 var ghClient *github.Client
@@ -71,6 +73,93 @@ func estimateLineNumbers(fragment *string, match *github.Match) (int, int) {
 	}
 
 	return startLine, endLine
+}
+
+func GetRepoNames(login string, isOrg bool) ([]string, error) {
+	token := os.Getenv("GITHUB_AUTH")
+	if token == "" {
+		return nil, fmt.Errorf("GITHUB_AUTH environment variable not set")
+	}
+
+	src := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
+	httpClient := oauth2.NewClient(context.Background(), src)
+	client := githubv4.NewClient(httpClient)
+
+	var allRepoNames []string
+	var cursor *githubv4.String
+
+	for {
+		if isOrg {
+			var query struct {
+				Organization struct {
+					Repositories struct {
+						Nodes []struct {
+							Name string
+						}
+						PageInfo struct {
+							HasNextPage bool
+							EndCursor   githubv4.String
+						}
+					} `graphql:"repositories(first: 100, after: $cursor)"`
+				} `graphql:"organization(login: $login)"`
+			}
+
+			vars := map[string]interface{}{
+				"login":  githubv4.String(login),
+				"cursor": cursor,
+			}
+
+			err := client.Query(context.Background(), &query, vars)
+			if err != nil {
+				return nil, fmt.Errorf("GitHub GraphQL org query failed: %w", err)
+			}
+
+			for _, node := range query.Organization.Repositories.Nodes {
+				allRepoNames = append(allRepoNames, node.Name)
+			}
+
+			if !query.Organization.Repositories.PageInfo.HasNextPage {
+				break
+			}
+			cursor = &query.Organization.Repositories.PageInfo.EndCursor
+
+		} else {
+			var query struct {
+				User struct {
+					Repositories struct {
+						Nodes []struct {
+							Name string
+						}
+						PageInfo struct {
+							HasNextPage bool
+							EndCursor   githubv4.String
+						}
+					} `graphql:"repositories(first: 100, after: $cursor)"`
+				} `graphql:"user(login: $login)"`
+			}
+
+			vars := map[string]interface{}{
+				"login":  githubv4.String(login),
+				"cursor": cursor,
+			}
+
+			err := client.Query(context.Background(), &query, vars)
+			if err != nil {
+				return nil, fmt.Errorf("GitHub GraphQL user query failed: %w", err)
+			}
+
+			for _, node := range query.User.Repositories.Nodes {
+				allRepoNames = append(allRepoNames, node.Name)
+			}
+
+			if !query.User.Repositories.PageInfo.HasNextPage {
+				break
+			}
+			cursor = &query.User.Repositories.PageInfo.EndCursor
+		}
+	}
+
+	return allRepoNames, nil
 }
 
 func GetReposByOrg(userOrOrg string, isOrg bool) ([]*github.Repository, error) {
