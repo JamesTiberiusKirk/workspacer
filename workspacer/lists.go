@@ -9,6 +9,7 @@ import (
 	"github.com/JamesTiberiusKirk/workspacer/log"
 	"github.com/JamesTiberiusKirk/workspacer/ui/list"
 	"github.com/JamesTiberiusKirk/workspacer/util"
+	"github.com/google/go-github/v66/github"
 )
 
 func ChooseFromOpenWorkspaceProjectsAndSwitch(workspace string, workspaceConfig config.WorkspaceConfig, sessionPresets map[string]config.SessionConfig) {
@@ -35,6 +36,18 @@ func ChooseFromOpenWorkspaceProjectsAndSwitch(workspace string, workspaceConfig 
 	return
 }
 
+func removeRepoFromArray(repos []*github.Repository, name string) []*github.Repository {
+	res := []*github.Repository{}
+	for _, r := range repos {
+		if *r.Name == name {
+			continue
+		}
+		res = append(res, r)
+	}
+
+	return res
+}
+
 func ChoseProjectFromWorkspace(workspace string, wc config.WorkspaceConfig, extraOptions []list.Item) (string, string) {
 	if _, err := os.Stat(util.GetWorkspacePath(wc)); os.IsNotExist(err) {
 		log.Error("workspace %s does not exist", workspace)
@@ -49,21 +62,42 @@ func ChoseProjectFromWorkspace(workspace string, wc config.WorkspaceConfig, extr
 		panic(err)
 	}
 
+	remoteRepos, err := GetReposByOrg(wc.GithubOrg, wc.IsOrg)
+	if err != nil {
+		panic(err)
+	}
+
 	folders := []list.Item{}
 	for _, e := range entries {
-		if e.IsDir() {
-			item := list.Item{Display: e.Name(), Value: "folder:" + e.Name(), Subtitle: "Folder"}
-			if util.HasGitSubfolder(filepath.Join(path, e.Name())) {
-				item.Subtitle = "Git Repo"
-			}
-
-			if util.Contains(openProjects, e.Name()) {
-				item.Display = item.Display + " (Active)"
-			}
-
-			folders = append(folders, item)
+		if !e.IsDir() {
+			continue
 		}
+
+		item := list.Item{Display: e.Name(), Value: "folder:" + e.Name(), Subtitle: "Folder"}
+		if util.HasGitSubfolder(filepath.Join(path, e.Name())) {
+			item.Subtitle = "Local Git Repo"
+			remoteRepos = removeRepoFromArray(remoteRepos, e.Name())
+		}
+
+		if util.Contains(openProjects, e.Name()) {
+			item.Display = item.Display + " (Active)"
+		}
+
+		folders = append(folders, item)
 	}
+
+	for _, remoteRepo := range remoteRepos {
+		folders = append(folders, list.Item{
+			Display:  *remoteRepo.Name,
+			Value:    "git:" + *remoteRepo.Name,
+			Subtitle: "Clone From GitHub",
+		})
+	}
+
+	// // Sort by Display field (ascending)
+	// sort.Slice(folders, func(i, j int) bool {
+	// 	return folders[i].Display < folders[j].Display
+	// })
 
 	if len(extraOptions) > 0 {
 		folders = append(folders, extraOptions...)
@@ -78,9 +112,9 @@ func ChoseProjectFromWorkspace(workspace string, wc config.WorkspaceConfig, extr
 	}
 
 	if strings.HasPrefix(item.Value, "folder:") {
-		return "folder", item.Value[7:]
+		return "folder", strings.TrimPrefix(item.Value, "folder:")
 	} else if strings.HasPrefix(item.Value, "git:") {
-		return "git", item.Value
+		return "git", strings.TrimPrefix(item.Value, "git:")
 	}
 	return "", ""
 }

@@ -62,7 +62,7 @@ func main() {
 
 	args = as
 
-	fmt.Println(args)
+	log.Debug("args: %+v", args)
 
 	switch opts.Workspace {
 	case "current":
@@ -101,16 +101,30 @@ func main() {
 	log.Debug("env loaded")
 
 	if len(args) == 0 {
-		log.Info("TEST")
 		t, choise := workspacer.ChoseProjectFromWorkspace(opts.Workspace, workspaceConfig, nil)
 		switch t {
 		case "folder":
-			args = append([]string{choise}, args...)
+			// args = append([]string{choise}, args...)
 		case "git":
-			// TODO: close repo
+			err := workspacer.CloneRepo(workspaceConfig, choise)
+			if err != nil {
+				return
+			}
+			// args = append([]string{choise}, args...)
 		case "nochoise":
 			return
+
 		}
+
+		// try and open the directory
+		workspacer.StartOrSwitchToSession(
+			opts.Workspace,
+			workspaceConfig,
+			config.DefaultGlobalConfig.SessionPresets,
+			choise,
+		)
+		return
+
 	}
 
 	log.Debug("args: %v len(args):%d", args, len(args))
@@ -121,6 +135,7 @@ func main() {
 		// TODO: get list of all repos in an org and allow the user to clone one
 		// check if the directory already exists and mark it as so in the list
 		log.Info("CLONE, to be implemented")
+		return
 	case "l", "list":
 		// TODO: implement tmux session list only for the workspace
 		log.Info("LIST, to be implemented")
@@ -173,6 +188,37 @@ func main() {
 	case "get-tmux-workspace-filter":
 		template := "#{m:%s-*,#{session_name}}"
 		fmt.Printf(template, opts.Workspace)
+	case "new":
+		if len(args) < 2 {
+			fmt.Println("Need to provide the name of a new repo")
+			return
+		}
+
+		private := false
+		if len(args) == 3 && args[2] == "-private" {
+			private = true
+		}
+
+		name, err := workspacer.CreateGitHubRepo(workspaceConfig, args[1], private)
+		if err != nil {
+			fmt.Println("Error creating repo:", err)
+			return
+		}
+		fmt.Println("Created Repo:", name)
+
+		err = workspacer.NewProjectAndPush(workspaceConfig, name)
+		if err != nil {
+			fmt.Println("Error cloning:", err)
+			return
+		}
+
+		workspacer.StartOrSwitchToSession(
+			opts.Workspace,
+			workspaceConfig,
+			config.DefaultGlobalConfig.SessionPresets,
+			name,
+		)
+
 	default:
 		// try and open the directory
 		workspacer.StartOrSwitchToSession(

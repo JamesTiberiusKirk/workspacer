@@ -73,6 +73,91 @@ func estimateLineNumbers(fragment *string, match *github.Match) (int, int) {
 	return startLine, endLine
 }
 
+func GetReposByOrg(userOrOrg string, isOrg bool) ([]*github.Repository, error) {
+	client := newGitHubClient()
+	ctx := context.Background()
+
+	var allRepos []*github.Repository
+	page := 1
+	perPage := 100
+
+	for {
+		var (
+			repos []*github.Repository
+			resp  *github.Response
+			err   error
+		)
+
+		if isOrg {
+			opts := &github.RepositoryListByOrgOptions{
+				ListOptions: github.ListOptions{Page: page, PerPage: perPage},
+			}
+			repos, resp, err = client.Repositories.ListByOrg(ctx, userOrOrg, opts)
+		} else {
+			opts := &github.RepositoryListByUserOptions{
+				ListOptions: github.ListOptions{Page: page, PerPage: perPage},
+			}
+			repos, resp, err = client.Repositories.ListByUser(ctx, userOrOrg, opts)
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("GitHub API error: %w", err)
+		}
+
+		allRepos = append(allRepos, repos...)
+
+		if resp.NextPage == 0 {
+			break
+		}
+		page = resp.NextPage
+	}
+
+	// Filter out archived repos
+	var filteredRepos []*github.Repository
+	for _, repo := range allRepos {
+		if !repo.GetArchived() {
+			filteredRepos = append(filteredRepos, repo)
+		}
+	}
+
+	return filteredRepos, nil
+}
+
+func GetMyRepos() ([]*github.Repository, error) {
+	client := newGitHubClient()
+	ctx := context.Background()
+
+	opts := &github.RepositoryListByAuthenticatedUserOptions{
+		ListOptions: github.ListOptions{PerPage: 100},
+	}
+
+	var allRepos []*github.Repository
+	page := 1
+
+	for {
+		opts.Page = page
+		repos, resp, err := client.Repositories.ListByAuthenticatedUser(ctx, opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list repos: %w", err)
+		}
+		allRepos = append(allRepos, repos...)
+		if resp.NextPage == 0 {
+			break
+		}
+		page = resp.NextPage
+	}
+
+	// Filter out archived repos
+	var filteredRepos []*github.Repository
+	for _, repo := range allRepos {
+		if !repo.GetArchived() {
+			filteredRepos = append(filteredRepos, repo)
+		}
+	}
+
+	return filteredRepos, nil
+}
+
 func SearchGithubInUserOrOrg(userOrOrg, search string) {
 	wc := config.DefaultGlobalConfig.Workspaces[userOrOrg]
 	client := newGitHubClient()
@@ -110,17 +195,17 @@ func SearchGithubInUserOrOrg(userOrOrg, search string) {
 	p := tea.NewProgram(codelist.New(searchResults[:10], search))
 	m, err := p.Run()
 	if err != nil {
-		fmt.Printf("Error: %v", err)
+		log.Error("Error: %v", err)
 		return
 	}
 
 	if m, ok := m.(codelist.Model); ok {
 		selected := m.Selected()
 		if selected == nil {
-			fmt.Println("No selection")
+			log.Error("No selection")
 			return
 		}
-		fmt.Printf("Selected: %s - %s\n%s\n", selected.Repo, selected.Filename, selected.Snippet)
+		log.Error("Selected: %s - %s\n%s\n", selected.Repo, selected.Filename, selected.Snippet)
 	}
 }
 
@@ -179,4 +264,37 @@ func GetOpenPullRequestsByBranch(ws config.WorkspaceConfig, project, branch stri
 	}
 
 	return prs, nil
+}
+
+func CreateGitHubRepo(ws config.WorkspaceConfig, repoName string, isPrivate bool) (string, error) {
+	client := newGitHubClient()
+	ctx := context.Background()
+
+	repo := &github.Repository{
+		Name:    github.String(repoName),
+		Private: github.Bool(isPrivate),
+	}
+
+	var createdRepo *github.Repository
+	var resp *github.Response
+	var err error
+
+	if ws.IsOrg {
+		// Create under an organization
+		createdRepo, resp, err = client.Repositories.Create(ctx, ws.GithubOrg, repo)
+	} else {
+		// Create under the authenticated user
+		createdRepo, resp, err = client.Repositories.Create(ctx, "", repo)
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("failed to create repo: %w (status: %d)", err, resp.StatusCode)
+	}
+
+	// sshURL := createdRepo.GetSSHURL()
+	// if sshURL == "" {
+	// 	return "", fmt.Errorf("repository created, but SSH URL is empty")
+	// }
+
+	return *createdRepo.Name, nil
 }

@@ -13,13 +13,15 @@ var (
 				Name:          "Projects",
 				Prefix:        "ws",
 				Path:          "~/Projects/",
-				SessionPreset: "default",
 				GithubOrg:     "JamesTiberiusKirk",
+				IsOrg:         false,
+				SessionPreset: "default",
 			},
 			"av": {
 				Name:          "Aviva",
 				Prefix:        "av",
-				Path:          "~/Aviva",
+				Path:          "~/Aviva/",
+				IsOrg:         true,
 				GithubOrg:     "aviva-verde",
 				SessionPreset: "default",
 			},
@@ -28,15 +30,32 @@ var (
 			"default": {
 				Windows: []WindowConfig{
 					{
-						Name:   "vi",
-						Layout: gotmux.LayoutEvenHorizontal,
+						Name:   "nvim",
+						Layout: gotmux.LayoutMainVertical,
 						Panes: []PanesConfig{
-							{Command: "vi"},
+							{Command: "nvim-l"},
+							{Command: ""},
 						},
 					},
+				},
+			},
+			"dots": {
+				Path: "~/",
+				Windows: []WindowConfig{
 					{
-						Name:  "shell",
-						Panes: []PanesConfig{},
+						Name:   "nvim",
+						Layout: gotmux.LayoutMainVertical,
+						Panes: []PanesConfig{
+							{Command: "nvim-l"},
+						},
+						Path: "~/.config/nvim-l",
+					},
+					{
+						Name:   "tmux",
+						Layout: gotmux.LayoutMainVertical,
+						Panes: []PanesConfig{
+							{Command: "nvim-l ~/.tmux.conf ~/.tmux-linux.conf"},
+						},
 					},
 				},
 			},

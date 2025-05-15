@@ -33,25 +33,29 @@ type WorkspaceConfig struct {
 	Prefix        string          `json:"prefix"`
 	Path          string          `json:"path"`
 	GithubOrg     string          `json:"org_github"`
+	IsOrg         bool            `json:"is_org"`
 	Projects      []ProjectConfig `json:"projects"`
-	SessionPreset string
-	Session       SessionConfig `json:"session_config"`
+	SessionPreset string          `json:"session_preset"`
+	Session       SessionConfig   `json:"session_config"`
 }
 
 type PanesConfig struct {
 	Command     string      `json:"command"`
 	Orientation Orientation `json:"orientation"`
 	Size        int         `json:"size"`
+	Path        string
 }
 
 type WindowConfig struct {
 	Panes  []PanesConfig `json:"panes"`
 	Name   string        `json:"name"`
 	Layout string        `json:"layout"`
+	Path   string
 }
 
 type SessionConfig struct {
 	Windows []WindowConfig `json:"screens"`
+	Path    string
 }
 
 func (c *SessionConfig) ListPanes() []PanesConfig {

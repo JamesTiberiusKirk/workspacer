@@ -1,8 +1,10 @@
 package util
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -118,7 +120,7 @@ func GetProjectPath(wc config.WorkspaceConfig, project string) string {
 func DoesBranchExist(wc config.WorkspaceConfig, project, branch string) bool {
 	projectPath := GetProjectPath(wc, project)
 
-	gitOut, err := ExecCmd("git", "-C", projectPath, "remote", "show", "origin")
+	gitOut, err := ExecCmd("", "git", "-C", projectPath, "remote", "show", "origin")
 	if err != nil {
 		return false
 	}
@@ -138,7 +140,7 @@ func DoesBranchExist(wc config.WorkspaceConfig, project, branch string) bool {
 func GetGitMainBranch(wc config.WorkspaceConfig, project string) string {
 	projectPath := GetProjectPath(wc, project)
 
-	gitOut, err := ExecCmd("git", "-C", projectPath, "remote", "show", "origin")
+	gitOut, err := ExecCmd("", "git", "-C", projectPath, "remote", "show", "origin")
 	if err != nil {
 		log.Error("could not exec git: %s", err.Error())
 		return ""
@@ -160,7 +162,7 @@ func GetGitMainBranch(wc config.WorkspaceConfig, project string) string {
 func GetProjectCurrentBranch(wc config.WorkspaceConfig, project string) string {
 	projectPath := GetProjectPath(wc, project)
 
-	branch, err := ExecCmd("git", "-C", projectPath, "rev-parse", "--abbrev-ref", "HEAD")
+	branch, err := ExecCmd("", "git", "-C", projectPath, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		log.Error("could not exec git: %s", err.Error())
 		return ""
@@ -169,11 +171,25 @@ func GetProjectCurrentBranch(wc config.WorkspaceConfig, project string) string {
 	return branch
 }
 
-func ExecCmd(name string, args ...string) (string, error) {
+func ExecCmd(path, name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
-	out, err := cmd.Output()
+	if path != "" {
+		cmd.Dir = path
+	}
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("command failed: %s\n%s", err, string(out))
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func ExpandTilde(path string) (string, error) {
+	if strings.HasPrefix(path, "~") {
+		usr, err := user.Current()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(usr.HomeDir, path[1:]), nil
+	}
+	return path, nil
 }

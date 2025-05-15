@@ -1,7 +1,9 @@
 package workspacer
 
 import (
+	"bytes"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -145,7 +147,7 @@ func StartOrSwitchToSession(
 
 	panesConfig := sessionConfig.ListPanes()
 	for i, p := range panes {
-		fmt.Println(p.ID)
+		// fmt.Println(p.ID)
 
 		if len(panesConfig) <= i {
 			continue
@@ -160,6 +162,10 @@ func StartOrSwitchToSession(
 			if extraVimCommands != "" {
 				panesConfig[i].Command += " " + extraVimCommands
 			}
+		}
+
+		if panesConfig[i].Size > 0 && panesConfig[i].Size < 100 {
+			paneSize(panesConfig[i].Size)
 		}
 
 		p.RunCommand(panesConfig[i].Command)
@@ -182,4 +188,42 @@ func StartOrSwitchToSession(
 		fmt.Println(msg)
 		return
 	}
+}
+
+func paneSize(size int) error {
+	args := []string{
+		"resizep",
+		// "-t", fmt.Sprintf("%s:%s", w.SessionName, w.Name),
+		"-t{right}",
+		"-x " + fmt.Sprint(size) + "%"}
+	s, err_cmd, err_exec := RunCmd(args)
+	if err_exec != nil {
+		//HANDLE
+		fmt.Print(err_exec.Error())
+	}
+	if err_cmd != "" {
+		//HANDLE
+		fmt.Print(err_cmd)
+	}
+	fmt.Print(s)
+
+	return nil
+}
+
+func RunCmd(args []string) (string, string, error) {
+	tmux, err := exec.LookPath("tmux")
+	if err != nil {
+		return "", "", err
+	}
+	fmt.Print(tmux, fmt.Sprint(args))
+	cmd := exec.Command(tmux, args...)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err = cmd.Run()
+	outStr, errStr := string(stdout.Bytes()), string(stderr.Bytes())
+
+	return outStr, errStr, err
 }

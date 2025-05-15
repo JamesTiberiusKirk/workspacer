@@ -23,3 +23,8 @@ alias space1="workspacer -W=space1"
 - Pull in info from github with github client
     - Be able to pull in different gh accounts based on workspaces (one gh account for work and one personal)
 
+
+
+# TODOs
+- [ ] implement `new` sub-command
+- [ ] implement `clone` sub-command

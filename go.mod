@@ -1,6 +1,8 @@
 module github.com/JamesTiberiusKirk/workspacer
 
-go 1.22.1
+go 1.23.0
+
+toolchain go1.24.3
 
 require (
 	github.com/alecthomas/chroma v0.10.0
@@ -14,6 +16,7 @@ require (
 	github.com/rivo/tview v0.0.0-20241227133733-17b7edb88c57
 	github.com/sahilm/fuzzy v0.1.1
 	github.com/stretchr/testify v1.8.4
+	golang.org/x/oauth2 v0.30.0
 )
 
 require (
