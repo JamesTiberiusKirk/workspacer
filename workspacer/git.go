@@ -104,3 +104,42 @@ func NewProjectAndPush(wc config.WorkspaceConfig, repoName string) error {
 	fmt.Println("Repository created and pushed to GitHub:", sshURL)
 	return nil
 }
+
+func NewProject(wc config.WorkspaceConfig, repoName string) error {
+	parentFolder, err := util.ExpandTilde(wc.Path)
+	if err != nil {
+		return fmt.Errorf("failed to expand workspace path: %w", err)
+	}
+
+	repoPath := filepath.Join(parentFolder, repoName)
+
+	if err := os.MkdirAll(repoPath, 0755); err != nil {
+		return fmt.Errorf("failed to create folder: %w", err)
+	}
+
+	fmt.Printf("Creating folder %s\n", repoPath)
+
+	// Git init with master
+	if _, err := util.ExecCmd("", "git", "-C", repoPath, "init", "-b", "master"); err != nil {
+		return fmt.Errorf("git init failed: %w", err)
+	}
+
+	fmt.Printf("Initialised git repo\n")
+
+	// Derive go module path
+	modulePath := fmt.Sprintf("github.com/%s/%s", wc.GithubOrg, repoName)
+	if _, err := util.ExecCmd(repoPath, "go", "mod", "init", modulePath); err != nil {
+		return fmt.Errorf("go mod init failed: %w", err)
+	}
+
+	fmt.Printf("Initialised go module %s\n", modulePath)
+
+	// Create README
+	readmePath := filepath.Join(repoPath, "README.md")
+	if err := os.WriteFile(readmePath, []byte("# "+repoName+"\n"), 0644); err != nil {
+		return fmt.Errorf("failed to create README: %w", err)
+	}
+
+	fmt.Printf("Created README.md\n")
+	return nil
+}

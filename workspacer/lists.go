@@ -27,7 +27,9 @@ func ChooseFromOpenWorkspaceProjectsAndSwitch(workspace string, workspaceConfig 
 		panic(err)
 	}
 	if !found {
-		panic("not found")
+		// Assume that the user just existed the list
+		// panic("not found")
+		os.Exit(0)
 	}
 
 	StartOrSwitchToSession(workspace, workspaceConfig, sessionPresets, item.Value)

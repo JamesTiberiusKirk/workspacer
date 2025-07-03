@@ -2,7 +2,10 @@ package workspacer
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,47 +35,26 @@ func newGitHubClient() *github.Client {
 	return ghClient
 }
 
-func generateBlobURL(result *github.CodeResult, lineBegin, lineEnd int) string {
-	return fmt.Sprintf("https://github.com/%s/blob/%s/%s#L%d-L%d",
-		*result.Repository.FullName,
-		*result.Repository.DefaultBranch,
-		*result.Path,
-		lineBegin,
-		lineEnd,
-	)
-}
-
-func getRepoDefaultBranch(owner, repoName string) string {
-	client := github.NewClient(nil)
-	repo, _, err := client.Repositories.Get(context.Background(), owner, repoName)
-	if err != nil {
-		// handle error
-	}
-	return repo.GetDefaultBranch()
-}
-
-// BUG: so this does not work whats so ever lol
-func estimateLineNumbers(fragment *string, match *github.Match) (int, int) {
-	lines := strings.Split(*fragment, "\n")
-	startLine, endLine := 1, 1
-	currentLine := 1
-	fragmentStart := match.Indices[0]
-	fragmentEnd := match.Indices[1]
-
-	currentPos := 0
-	for i, line := range lines {
-		if currentPos <= fragmentStart && fragmentStart < currentPos+len(line) {
-			startLine = i + 1
-		}
-		if currentPos <= fragmentEnd && fragmentEnd <= currentPos+len(line) {
-			endLine = i + 1
-			break
-		}
-		currentPos += len(line) + 1 // +1 for the newline character
-		currentLine++
+func isNetworkError(err error) bool {
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
 	}
 
-	return startLine, endLine
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return true
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return true
+	}
+
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return true
+	}
+	return false
 }
 
 func GetRepoNames(login string, isOrg bool) ([]string, error) {
@@ -104,7 +86,7 @@ func GetRepoNames(login string, isOrg bool) ([]string, error) {
 				} `graphql:"organization(login: $login)"`
 			}
 
-			vars := map[string]interface{}{
+			vars := map[string]any{
 				"login":  githubv4.String(login),
 				"cursor": cursor,
 			}
@@ -138,13 +120,17 @@ func GetRepoNames(login string, isOrg bool) ([]string, error) {
 				} `graphql:"user(login: $login)"`
 			}
 
-			vars := map[string]interface{}{
+			vars := map[string]any{
 				"login":  githubv4.String(login),
 				"cursor": cursor,
 			}
 
 			err := client.Query(context.Background(), &query, vars)
 			if err != nil {
+				if isNetworkError(err) {
+					return []string{}, nil
+				}
+
 				return nil, fmt.Errorf("GitHub GraphQL user query failed: %w", err)
 			}
 
@@ -190,6 +176,9 @@ func GetReposByOrg(userOrOrg string, isOrg bool) ([]*github.Repository, error) {
 		}
 
 		if err != nil {
+			if isNetworkError(err) {
+				return []*github.Repository{}, nil
+			}
 			return nil, fmt.Errorf("GitHub API error: %w", err)
 		}
 
@@ -227,6 +216,9 @@ func GetMyRepos() ([]*github.Repository, error) {
 		opts.Page = page
 		repos, resp, err := client.Repositories.ListByAuthenticatedUser(ctx, opts)
 		if err != nil {
+			if isNetworkError(err) {
+				return []*github.Repository{}, nil
+			}
 			return nil, fmt.Errorf("failed to list repos: %w", err)
 		}
 		allRepos = append(allRepos, repos...)

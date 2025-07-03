@@ -9,6 +9,12 @@ var (
 	DefaultGlobalConfig = GlobalUserConfig{
 		DefaultWorkspace: "ws",
 		Workspaces: map[string]WorkspaceConfig{
+			"notes": {
+				Name:          "Notes",
+				Prefix:        "notes",
+				Path:          "~/Documents/notes/",
+				SessionPreset: "notes",
+			},
 			"ws": {
 				Name:          "Projects",
 				Prefix:        "ws",
@@ -17,24 +23,15 @@ var (
 				IsOrg:         false,
 				SessionPreset: "default",
 			},
-			"av": {
-				Name:          "Aviva",
-				Prefix:        "av",
-				Path:          "~/Aviva/",
-				IsOrg:         true,
-				GithubOrg:     "aviva-verde",
-				SessionPreset: "default-mac",
-			},
 		},
 		SessionPresets: map[string]SessionConfig{
-			"default-mac": {
+			"notes": {
 				Windows: []WindowConfig{
 					{
 						Name:   "nvim",
 						Layout: gotmux.LayoutMainVertical,
 						Panes: []PanesConfig{
-							{Command: "nvim"},
-							{Command: "git diff --quiet && git diff --cached --quiet && git pull"},
+							{Command: "nvim-l"},
 						},
 					},
 				},
@@ -55,10 +52,10 @@ var (
 				Path: "~/",
 				Windows: []WindowConfig{
 					{
-						Name:   "nvim",
+						Name:   "~/",
 						Layout: gotmux.LayoutMainVertical,
 						Panes: []PanesConfig{
-							{Command: "nvim-l"},
+							{Command: "$EDITOR ~/.profile"},
 						},
 						Path: "~/.config/nvim-l",
 					},
@@ -66,8 +63,16 @@ var (
 						Name:   "tmux",
 						Layout: gotmux.LayoutMainVertical,
 						Panes: []PanesConfig{
-							{Command: "nvim-l ~/.tmux.conf ~/.tmux-linux.conf"},
+							{Command: "$EDITOR ~/.tmux.conf ~/.tmux-linux.conf"},
 						},
+					},
+					{
+						Name:   "hyprland",
+						Layout: gotmux.LayoutMainVertical,
+						Panes: []PanesConfig{
+							{Command: "$EDITOR"},
+						},
+						Path: "~/.config/hypr/",
 					},
 				},
 			},
