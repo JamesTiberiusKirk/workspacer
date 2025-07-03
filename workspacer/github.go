@@ -34,21 +34,21 @@ func newGitHubClient() *github.Client {
 	return ghClient
 }
 
-var ghGraphQlClient *githubv4.Client
-
-func newGitHubGraphQlClient() *githubv4.Client {
-	if ghGraphQlClient != nil {
-		return ghGraphQlClient
-	}
-
-	token := os.Getenv("GITHUB_AUTH")
-
-	src := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
-	httpClient := oauth2.NewClient(context.Background(), src)
-	ghGraphQlClient = githubv4.NewClient(httpClient)
-
-	return ghGraphQlClient
-}
+// var ghGraphQlClient *githubv4.Client
+//
+// func newGitHubGraphQlClient() *githubv4.Client {
+// 	if ghGraphQlClient != nil {
+// 		return ghGraphQlClient
+// 	}
+//
+// 	token := os.Getenv("GITHUB_AUTH")
+//
+// 	src := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
+// 	httpClient := oauth2.NewClient(context.Background(), src)
+// 	ghGraphQlClient = githubv4.NewClient(httpClient)
+//
+// 	return ghGraphQlClient
+// }
 
 func isNetworkError(err error) bool {
 	var netErr net.Error
