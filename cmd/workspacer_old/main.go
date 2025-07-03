@@ -117,7 +117,6 @@ func main() {
 
 		// try and open the directory
 		workspacer.StartOrSwitchToSession(
-			opts.Workspace,
 			workspaceConfig,
 			config.DefaultGlobalConfig.SessionPresets,
 			choise,
@@ -248,7 +247,6 @@ func main() {
 		}
 
 		workspacer.StartOrSwitchToSession(
-			opts.Workspace,
 			workspaceConfig,
 			config.DefaultGlobalConfig.SessionPresets,
 			name,
@@ -257,7 +255,6 @@ func main() {
 	default:
 		// try and open the directory
 		workspacer.StartOrSwitchToSession(
-			opts.Workspace,
 			workspaceConfig,
 			config.DefaultGlobalConfig.SessionPresets,
 			args[0],

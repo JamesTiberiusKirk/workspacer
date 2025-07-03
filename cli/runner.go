@@ -11,17 +11,20 @@ import (
 )
 
 func Run(cm ConfigMapType) {
+	// Cursed ik, but it works perfectly
+	if len(os.Args) == 2 && (os.Args[1] == "-h" || os.Args[1] == "-help") ||
+		len(os.Args) == 3 && (os.Args[2] == "-h" || os.Args[2] == "-help") ||
+		len(os.Args) == 4 && (os.Args[3] == "-h" || os.Args[3] == "-help") {
+		printHelp(cm)
+		return
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	args := os.Args[1:]
 	customCtx := ConfigMapCtx{
 		Context: ctx,
 		Args:    args,
-	}
-
-	if os.Args[1] == "-h" || os.Args[1] == "-help" {
-		printHelp(cm)
-		return
 	}
 
 	subCommand := ""
@@ -56,13 +59,13 @@ func Run(cm ConfigMapType) {
 }
 
 func printHelp(cm ConfigMapType) {
-	fmt.Println("Usage:")
-	fmt.Println("workspacer <global flags and values> [subCommand] <...>")
-	fmt.Println("\t-h,help\tPrint this message.")
-	fmt.Println("\t-workspace\tDefine workspace.")
-	fmt.Println()
-
-	fmt.Println("Commands:")
+	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+	fmt.Fprintln(w, "Usage:\t")
+	fmt.Fprintln(w, "\tworkspacer <global flags> [subCommand] <...>")
+	fmt.Fprintln(w, "\tGlobal flags:")
+	fmt.Fprintln(w, "\t\t-h,help\tPrint this message.")
+	fmt.Fprintln(w, "\t\t-workspace\tDefine workspace.")
+	fmt.Fprintln(w)
 
 	// Sort command names case-insensitively
 	keys := make([]string, 0, len(cm))
@@ -73,9 +76,9 @@ func printHelp(cm ConfigMapType) {
 		return strings.ToLower(keys[i]) < strings.ToLower(keys[j])
 	})
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 8, 2, ' ', 0)
 	const maxWidth = 60
 
+	fmt.Fprintln(w, "Commands:")
 	for _, k := range keys {
 		v := cm[k]
 
@@ -93,22 +96,22 @@ func printHelp(cm ConfigMapType) {
 			}
 		}
 
-		if v.Help != "" {
-			// Blank line before flags/help
-			fmt.Fprintln(w, "\t\t\t\t")
-			fmt.Fprintf(w, "\t\t\tFlags:")
-
-			helpLines := strings.Split(v.Help, "\n")
-			for _, hl := range helpLines {
-				wrappedHelp := wrapText(strings.TrimSpace(hl), maxWidth)
-				for _, line := range wrappedHelp {
-					fmt.Fprintf(w, "\t\t\t%s\n", line)
-				}
-			}
-		}
+		// if v.Help != "" {
+		// 	// Blank line before flags/help
+		// 	fmt.Fprintln(w, "\t\t\t\t")
+		// 	fmt.Fprintf(w, "\t\t\tFlags:")
+		//
+		// 	helpLines := strings.Split(v.Help, "\n")
+		// 	for _, hl := range helpLines {
+		// 		wrappedHelp := wrapText(strings.TrimSpace(hl), maxWidth)
+		// 		for _, line := range wrappedHelp {
+		// 			fmt.Fprintf(w, "\t\t\t%s\n", line)
+		// 		}
+		// 	}
+		// }
 
 		// Blank line after each command block
-		fmt.Fprintln(w, "\t\t\t\t")
+		// fmt.Fprintln(w, "\t\t\t\t")
 	}
 
 	w.Flush()

@@ -61,7 +61,6 @@ var ConfigMap ConfigMapType = ConfigMapType{
 
 			// try and open the directory
 			workspacer.StartOrSwitchToSession(
-				ctx.WorkspaceConfig.Prefix,
 				ctx.WorkspaceConfig,
 				ctx.Config.SessionPresets,
 				choise,
@@ -76,7 +75,6 @@ var ConfigMap ConfigMapType = ConfigMapType{
 		Runner: MiddlewareCommon(func(ctx ConfigMapCtx) {
 			// try and open the directory
 			workspacer.StartOrSwitchToSession(
-				ctx.WorkspaceConfig.Name,
 				ctx.WorkspaceConfig,
 				ctx.Config.SessionPresets,
 				ctx.Args[0],
@@ -109,7 +107,7 @@ var ConfigMap ConfigMapType = ConfigMapType{
 
 	"s,search": &Command{
 		Description: "Search in github org or user",
-		Runner: func(ctx ConfigMapCtx) {
+		Runner: MiddlewareCommon(func(ctx ConfigMapCtx) {
 			searchArgs := ""
 			if len(ctx.Args) > 1 {
 				for _, arg := range ctx.Args[1:] {
@@ -118,12 +116,12 @@ var ConfigMap ConfigMapType = ConfigMapType{
 			}
 
 			workspacer.SearchGithubInUserOrOrg(ctx.WorkspaceConfig.GithubOrg, searchArgs)
-		},
+		}),
 	},
 
 	"a,actions": &Command{
 		Description: "Get github actions status for tmux",
-		Runner: func(ctx ConfigMapCtx) {
+		Runner: MiddlewareCommon(func(ctx ConfigMapCtx) {
 			mainBranch := util.GetGitMainBranch(ctx.WorkspaceConfig, ctx.Project)
 
 			branch := util.GetProjectCurrentBranch(ctx.WorkspaceConfig, ctx.Project)
@@ -149,24 +147,24 @@ var ConfigMap ConfigMapType = ConfigMapType{
 			for _, r := range results {
 				fmt.Println(r)
 			}
-		},
+		}),
 	},
 
 	"o,open": &Command{
 		Description: "Open list chooser for the currently open workspace sessions",
-		Runner: func(ctx ConfigMapCtx) {
+		Runner: MiddlewareCommon(func(ctx ConfigMapCtx) {
 			workspacer.ChooseFromOpenWorkspaceProjectsAndSwitch(ctx.WorkspaceConfig.Prefix,
 				ctx.WorkspaceConfig,
 				config.DefaultGlobalConfig.SessionPresets,
 			)
-		},
+		}),
 	},
 
 	"CA,close-all": &Command{
 		Description: "Close all sessions in workspace",
-		Runner: func(ctx ConfigMapCtx) {
+		Runner: MiddlewareCommon(func(ctx ConfigMapCtx) {
 			workspacer.CloseAllSessionsInWorkspace(ctx.WorkspaceConfig)
-		},
+		}),
 	},
 
 	// Used by my tmux config to get current session
@@ -175,7 +173,7 @@ var ConfigMap ConfigMapType = ConfigMapType{
 		If no workspace present, return without any filter.
 		Example config:
 		bind-key s run-shell "tmux choose-tree -Zs -f \"$(workspacer -W=current get-tmux-workspace-filter)\""`,
-		Runner: func(ctx ConfigMapCtx) {
+		Runner: MiddlewareCommon(func(ctx ConfigMapCtx) {
 			if ctx.WorkspaceConfig.Prefix == "" {
 				fmt.Print("#{session_name}")
 				return
@@ -183,12 +181,12 @@ var ConfigMap ConfigMapType = ConfigMapType{
 
 			template := "#{m:%s-*,#{session_name}}"
 			fmt.Printf(template, ctx.WorkspaceConfig.Prefix)
-		},
+		}),
 	},
 
 	"from-presets": &Command{
 		Description: "Open up a preset as a project. I.E. a preset for editing dot files which might be defined in session presets section",
-		Runner: func(ctx ConfigMapCtx) {
+		Runner: MiddlewareCommon(func(ctx ConfigMapCtx) {
 			if len(ctx.Args) < 2 {
 				fmt.Println("Need to provide the name of a new repo")
 				return
@@ -196,7 +194,7 @@ var ConfigMap ConfigMapType = ConfigMapType{
 
 			sessionPreset := ctx.Args[1]
 			workspacer.StartOrSwitchToTmuxPreset("dots", "", config.DefaultGlobalConfig.SessionPresets[sessionPreset])
-		},
+		}),
 	},
 
 	"n,new": &Command{
@@ -206,7 +204,7 @@ var ConfigMap ConfigMapType = ConfigMapType{
 		-private	Initiate repo as private if -gh is on
 		-h			Print this message
 		`,
-		Runner: func(ctx ConfigMapCtx) {
+		Runner: MiddlewareCommon(func(ctx ConfigMapCtx) {
 			if len(ctx.Args) < 2 {
 				fmt.Println("Need to provide the name of a new repo")
 				return
@@ -259,11 +257,10 @@ var ConfigMap ConfigMapType = ConfigMapType{
 			}
 
 			workspacer.StartOrSwitchToSession(
-				ctx.WorkspaceConfig.Prefix,
 				ctx.WorkspaceConfig,
 				config.DefaultGlobalConfig.SessionPresets,
 				name,
 			)
-		},
+		}),
 	},
 }

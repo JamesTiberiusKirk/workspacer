@@ -32,7 +32,7 @@ func ChooseFromOpenWorkspaceProjectsAndSwitch(workspace string, workspaceConfig 
 		os.Exit(0)
 	}
 
-	StartOrSwitchToSession(workspace, workspaceConfig, sessionPresets, item.Value)
+	StartOrSwitchToSession(workspaceConfig, sessionPresets, item.Value)
 
 	return
 }

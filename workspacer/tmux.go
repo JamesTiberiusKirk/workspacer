@@ -143,7 +143,6 @@ func StartOrSwitchToTmuxPreset(name string, basePath string, preset config.Sessi
 }
 
 func StartOrSwitchToSession(
-	wsName string,
 	wc config.WorkspaceConfig,
 	presets map[string]config.SessionConfig,
 	project string,
@@ -168,7 +167,7 @@ func StartOrSwitchToSession(
 	sessionName := project
 
 	if wc.Prefix != "" {
-		sessionName = wsName + "-" + sessionName
+		sessionName = wc.Prefix + "-" + sessionName
 	}
 
 	server := new(gotmux.Server)
