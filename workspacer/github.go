@@ -23,7 +23,6 @@ var ghClient *github.Client
 
 func newGitHubClient() *github.Client {
 	if ghClient != nil {
-		fmt.Println("Returning existing client")
 		return ghClient
 	}
 	ghAuth := os.Getenv("GITHUB_AUTH")
@@ -33,6 +32,22 @@ func newGitHubClient() *github.Client {
 		ghClient = github.NewClient(nil)
 	}
 	return ghClient
+}
+
+var ghGraphQlClient *githubv4.Client
+
+func newGitHubGraphQlClient() *githubv4.Client {
+	if ghGraphQlClient != nil {
+		return ghGraphQlClient
+	}
+
+	token := os.Getenv("GITHUB_AUTH")
+
+	src := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
+	httpClient := oauth2.NewClient(context.Background(), src)
+	ghGraphQlClient = githubv4.NewClient(httpClient)
+
+	return ghGraphQlClient
 }
 
 func isNetworkError(err error) bool {
@@ -60,7 +75,7 @@ func isNetworkError(err error) bool {
 func GetRepoNames(login string, isOrg bool) ([]string, error) {
 	token := os.Getenv("GITHUB_AUTH")
 	if token == "" {
-		return nil, fmt.Errorf("GITHUB_AUTH environment variable not set")
+		return []string{}, nil
 	}
 
 	src := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
