@@ -66,7 +66,7 @@ func MiddlewareAssertWorkspace(r Runner) Runner {
 		}
 
 		ctx.WorkspaceConfig = wsConfig
-		ctx.Args = flag.Args()
+		ctx.Args = fs.Args()
 
 		util.LoadEnvFile(ctx.WorkspaceConfig)
 

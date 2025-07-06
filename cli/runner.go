@@ -11,16 +11,20 @@ import (
 )
 
 func Run(cm ConfigMapType) {
-	// Cursed ik, but it works perfectly
-	if len(os.Args) == 2 && (os.Args[1] == "-h" || os.Args[1] == "-help") ||
-		len(os.Args) == 3 && (os.Args[2] == "-h" || os.Args[2] == "-help") ||
-		len(os.Args) == 4 && (os.Args[3] == "-h" || os.Args[3] == "-help") {
-		printHelp(cm)
-		return
+	// parse help out of arg list but NOT after any sub commands
+	for _, a := range os.Args[1:] {
+		if !strings.HasPrefix(a, "-") {
+			break
+		}
+		if a == "-h" || a == "-help" {
+			printHelp(cm)
+			return
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	args := os.Args[1:]
 	customCtx := ConfigMapCtx{
 		Context: ctx,
@@ -61,10 +65,24 @@ func Run(cm ConfigMapType) {
 func printHelp(cm ConfigMapType) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(w, "Usage:\t")
-	fmt.Fprintln(w, "\tworkspacer <global flags> [subCommand] <...>")
+
+	projectCommand, ok := cm[CommandTypeDefault]
+	if ok {
+		printCommand(w, "workspacer -W workspace <project>", projectCommand.Description)
+	}
+
+	noCommand, ok := cm[CommandTypeNoCommand]
+	if ok {
+		printCommand(w, "workspacer -W workspace", noCommand.Description)
+	}
+
+	printCommand(w, "workspacer <global flags> [subCommand] <...>", "")
+	fmt.Fprintln(w)
+
 	fmt.Fprintln(w, "\tGlobal flags:")
 	fmt.Fprintln(w, "\t\t-h,help\tPrint this message.")
 	fmt.Fprintln(w, "\t\t-workspace\tDefine workspace.")
+	fmt.Fprintln(w)
 	fmt.Fprintln(w)
 
 	// Sort command names case-insensitively
@@ -76,45 +94,40 @@ func printHelp(cm ConfigMapType) {
 		return strings.ToLower(keys[i]) < strings.ToLower(keys[j])
 	})
 
-	const maxWidth = 60
-
-	fmt.Fprintln(w, "Commands:")
+	fmt.Fprintln(w, "Sub commands:")
 	for _, k := range keys {
 		v := cm[k]
 
-		if v.Description != "" {
-			descLines := strings.Split(v.Description, "\n")
-			wrappedDesc := []string{}
-			for _, dl := range descLines {
-				wrappedDesc = append(wrappedDesc, wrapText(strings.TrimSpace(dl), maxWidth)...)
-			}
-			// Print first line with key
-			fmt.Fprintf(w, "\t\t%s\t%s\n", k, wrappedDesc[0])
-			// Print rest of wrapped description lines indented
-			for _, line := range wrappedDesc[1:] {
-				fmt.Fprintf(w, "\t\t\t%s\n", line)
-			}
+		if v.Description == CommandTypeDefault {
+			continue
 		}
 
-		// if v.Help != "" {
-		// 	// Blank line before flags/help
-		// 	fmt.Fprintln(w, "\t\t\t\t")
-		// 	fmt.Fprintf(w, "\t\t\tFlags:")
-		//
-		// 	helpLines := strings.Split(v.Help, "\n")
-		// 	for _, hl := range helpLines {
-		// 		wrappedHelp := wrapText(strings.TrimSpace(hl), maxWidth)
-		// 		for _, line := range wrappedHelp {
-		// 			fmt.Fprintf(w, "\t\t\t%s\n", line)
-		// 		}
-		// 	}
-		// }
+		if v.Description == CommandTypeNoCommand {
+			continue
+		}
 
-		// Blank line after each command block
-		// fmt.Fprintln(w, "\t\t\t\t")
+		if v.Description != "" {
+			printCommand(w, k, v.Description)
+		}
 	}
 
 	w.Flush()
+}
+
+const maxWidth = 60
+
+func printCommand(w *tabwriter.Writer, name, desc string) {
+	descLines := strings.Split(desc, "\n")
+	wrappedDesc := []string{}
+	for _, dl := range descLines {
+		wrappedDesc = append(wrappedDesc, wrapText(strings.TrimSpace(dl), maxWidth)...)
+	}
+	// Print first line with key
+	fmt.Fprintf(w, "\t\t%s\t%s\n", name, wrappedDesc[0])
+	// Print rest of wrapped description lines indented
+	for _, line := range wrappedDesc[1:] {
+		fmt.Fprintf(w, "\t\t\t%s\n", line)
+	}
 }
 
 func wrapText(text string, maxWidth int) []string {
