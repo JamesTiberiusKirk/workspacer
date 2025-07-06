@@ -22,12 +22,17 @@ func RunNewCommand(ctx cli.ConfigMapCtx) {
 		return
 	}
 
+	if name == "new" {
+		panic("either you cant provide name new or there's a bug where the sub command got used for the name of the new project")
+	}
+
 	if *ghFlag {
 		name, err := workspacer.CreateGitHubRepo(ctx.WorkspaceConfig, name, *privateFLag)
 		if err != nil {
 			fmt.Println("Error creating repo:", err)
 			return
 		}
+
 		fmt.Println("Created Repo:", name)
 
 		err = workspacer.NewProjectAndPush(ctx.WorkspaceConfig, name)
