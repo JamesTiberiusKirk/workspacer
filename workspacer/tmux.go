@@ -65,6 +65,12 @@ func StartOrSwitchToTmuxPreset(name string, basePath string, preset config.Sessi
 		}
 	}
 
+	basePath, err := util.ExpandTilde(basePath)
+	if err != nil {
+		fmt.Println("Error expanding user home folder")
+		return
+	}
+
 	windows := []gotmux.Window{}
 	for i, w := range preset.Windows {
 		panes := []gotmux.Pane{}
@@ -73,11 +79,16 @@ func StartOrSwitchToTmuxPreset(name string, basePath string, preset config.Sessi
 			panes = append(panes, pane)
 		}
 
+		if w.Path == "" {
+			w.Path = basePath
+		}
+
 		window := gotmux.Window{
-			Id:     i + 1,
-			Name:   w.Name,
-			Layout: w.Layout,
-			Panes:  panes,
+			Id:             i + 1,
+			Name:           w.Name,
+			Layout:         w.Layout,
+			Panes:          panes,
+			StartDirectory: w.Path,
 		}
 
 		windows = append(windows, window)
@@ -93,7 +104,7 @@ func StartOrSwitchToTmuxPreset(name string, basePath string, preset config.Sessi
 	}
 
 	// Setup this configuration.
-	err := conf.Apply()
+	err = conf.Apply()
 	if err != nil {
 		msg := fmt.Errorf("Can't apply prepared configuration: %s", err)
 		fmt.Println(msg)

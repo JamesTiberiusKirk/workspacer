@@ -26,6 +26,7 @@ var (
 		},
 		SessionPresets: map[string]SessionConfig{
 			"notes": {
+				Path: "~/Documents/notes/",
 				Windows: []WindowConfig{
 					{
 						Name:   "nvim",

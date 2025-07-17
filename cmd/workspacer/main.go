@@ -159,17 +159,22 @@ var ConfigMap cli.ConfigMapType = cli.ConfigMapType{
 		}),
 	},
 
-	"from-presets": &cli.Command{
+	"from-preset": &cli.Command{
 		Description: "Open up a preset as a project. I.E. a preset for editing dot files which might be defined in session presets section",
-		Runner: cli.MiddlewareCommon(func(ctx cli.ConfigMapCtx) {
+		Runner: func(ctx cli.ConfigMapCtx) {
 			if len(ctx.Args) < 2 {
 				fmt.Println("Need to provide the name of a new repo")
 				return
 			}
 
 			sessionPreset := ctx.Args[1]
-			workspacer.StartOrSwitchToTmuxPreset("dots", "", config.DefaultGlobalConfig.SessionPresets[sessionPreset])
-		}),
+			preset, ok := config.DefaultGlobalConfig.SessionPresets[sessionPreset]
+			if !ok {
+
+			}
+
+			workspacer.StartOrSwitchToTmuxPreset(sessionPreset, preset.Path, preset)
+		},
 	},
 
 	"n,new": &cli.Command{

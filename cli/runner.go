@@ -16,7 +16,7 @@ func Run(cm ConfigMapType) {
 		if !strings.HasPrefix(a, "-") {
 			break
 		}
-		if a == "-h" || a == "-help" {
+		if a == "-h" || a == "-help" || a == "--help" {
 			printHelp(cm)
 			return
 		}
@@ -59,7 +59,13 @@ func Run(cm ConfigMapType) {
 		subCommand = CommandTypeNoCommand
 	}
 
-	cm[subCommand].Runner(customCtx)
+	command, ok := cm[subCommand]
+	if !ok {
+		fmt.Println("Command not found: ", subCommand)
+		os.Exit(1)
+	}
+
+	command.Runner(customCtx)
 }
 
 func printHelp(cm ConfigMapType) {
@@ -81,7 +87,7 @@ func printHelp(cm ConfigMapType) {
 
 	fmt.Fprintln(w, "\tGlobal flags:")
 	fmt.Fprintln(w, "\t\t-h,help\tPrint this message.")
-	fmt.Fprintln(w, "\t\t-workspace\tDefine workspace.")
+	fmt.Fprintln(w, "\t\t-W,workspace\tDefine workspace.")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w)
 
