@@ -100,7 +100,7 @@ func main() {
 	log.Debug("env loaded")
 
 	if len(args) == 0 {
-		t, choise := workspacer.ChoseProjectFromWorkspace(opts.Workspace, workspaceConfig, nil)
+		t, choise := workspacer.ChoseProjectFromLocalWorkspace(opts.Workspace, workspaceConfig, nil)
 		switch t {
 		case "folder":
 			// args = append([]string{choise}, args...)

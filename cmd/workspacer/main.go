@@ -15,7 +15,7 @@ var ConfigMap cli.ConfigMapType = cli.ConfigMapType{
 	cli.CommandTypeNoCommand: &cli.Command{
 		Description: "Run the project picker.",
 		Runner: cli.MiddlewareCommon(func(ctx cli.ConfigMapCtx) {
-			t, choise := workspacer.ChoseProjectFromWorkspace(
+			t, choise := workspacer.ChoseProjectFromLocalWorkspace(
 				ctx.WorkspaceConfig.Prefix,
 				ctx.WorkspaceConfig,
 				nil,

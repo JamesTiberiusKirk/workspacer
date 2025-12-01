@@ -229,14 +229,41 @@ func StartOrSwitchToSession(
 			panes = append(panes, pane)
 		}
 
+		windowName := w.Name
+		// Override first window name with project name
+		if i == 0 {
+			windowName = project
+		}
+
 		window := gotmux.Window{
 			Id:     i + 1,
-			Name:   w.Name,
+			Name:   windowName,
 			Layout: w.Layout,
 			Panes:  panes,
 		}
 
 		windows = append(windows, window)
+	}
+
+	// Check if we should add a tenant repo window
+	if wc.EnableTenantRepos &&
+		util.IsServiceRepo(wc, project) &&
+		util.DoesTenantRepoExist(wc, project) {
+		tenantRepoName := util.GetTenantRepoName(wc, project)
+		tenantPath := filepath.Join(util.GetWorkspacePath(wc), tenantRepoName)
+
+		// Create a simple window with one pane for the tenant repo
+		panes := []gotmux.Pane{{}}
+
+		tenantWindow := gotmux.Window{
+			Id:             len(windows) + 1,
+			Name:           "tenant",
+			Layout:         gotmux.LayoutEvenHorizontal,
+			Panes:          panes,
+			StartDirectory: tenantPath,
+		}
+
+		windows = append(windows, tenantWindow)
 	}
 
 	session := gotmux.NewSession(0, sessionName, path, windows)

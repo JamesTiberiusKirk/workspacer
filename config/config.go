@@ -29,14 +29,17 @@ type ProjectConfig struct {
 }
 
 type WorkspaceConfig struct {
-	Name          string          `json:"name"`
-	Prefix        string          `json:"prefix"`
-	Path          string          `json:"path"`
-	GithubOrg     string          `json:"org_github"`
-	IsOrg         bool            `json:"is_org"`
-	Projects      []ProjectConfig `json:"projects"`
-	SessionPreset string          `json:"session_preset"`
-	Session       SessionConfig   `json:"session_config"`
+	Name              string          `json:"name"`
+	Prefix            string          `json:"prefix"`
+	Path              string          `json:"path"`
+	GithubOrg         string          `json:"org_github"`
+	IsOrg             bool            `json:"is_org"`
+	Projects          []ProjectConfig `json:"projects"`
+	SessionPreset     string          `json:"session_preset"`
+	Session           SessionConfig   `json:"session_config"`
+	EnableTenantRepos bool            `json:"enable_tenant_repos"`
+	TenantRepoPrefix  string          `json:"tenant_repo_prefix"`
+	ActiveProjectsFirst bool          `json:"active_projects_first"`
 }
 
 type PanesConfig struct {
