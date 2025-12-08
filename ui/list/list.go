@@ -1,6 +1,8 @@
 package list
 
 import (
+	"strings"
+
 	"github.com/JamesTiberiusKirk/workspacer/ui/list/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -18,11 +20,14 @@ var docStyle = lipgloss.NewStyle().
 
 type Item struct {
 	Display, Subtitle, Value string
+	IsActive                 bool
 }
 
 func (i Item) Title() string       { return i.Display }
 func (i Item) Description() string { return i.Subtitle }
-func (i Item) FilterValue() string { return i.Display + i.Subtitle + i.Value }
+func (i Item) FilterValue() string {
+	return i.Display + i.Subtitle + i.Value
+}
 
 type model struct {
 	list   list.Model
@@ -60,14 +65,64 @@ func (m model) View() string {
 	return docStyle.Render(m.list.View())
 }
 
+// orderPreservingFilter keeps items in their input order while filtering
+func orderPreservingFilter(term string, targets []string) []list.Rank {
+	if term == "" {
+		// Return all items in order
+		result := make([]list.Rank, len(targets))
+		for i := range targets {
+			result[i] = list.Rank{Index: i}
+		}
+		return result
+	}
+
+	// Use fuzzy matching but preserve input order
+	matches := []list.Rank{}
+	for i, target := range targets {
+		// Simple case-insensitive substring matching
+		// You can use fuzzy matching here if needed, but preserve order
+		targetLower := strings.ToLower(target)
+		termLower := strings.ToLower(term)
+
+		if strings.Contains(targetLower, termLower) {
+			matches = append(matches, list.Rank{Index: i})
+		}
+	}
+
+	return matches
+}
+
 func NewList(title string, Items []Item) (Item, bool, error) {
-	ii := make([]list.Item, len(Items))
-	for i, item := range Items {
+	// Sort items with active first to preserve order during filtering
+	sortedItems := make([]Item, len(Items))
+	copy(sortedItems, Items)
+
+	// Separate into active and inactive, preserving order within each group
+	activeItems := []Item{}
+	inactiveItems := []Item{}
+	for _, item := range sortedItems {
+		if item.IsActive {
+			activeItems = append(activeItems, item)
+		} else {
+			inactiveItems = append(inactiveItems, item)
+		}
+	}
+
+	// Combine: active first, then inactive
+	sortedItems = append(activeItems, inactiveItems...)
+
+	// Convert to list.Item interface
+	ii := make([]list.Item, len(sortedItems))
+	for i, item := range sortedItems {
 		ii[i] = item
 	}
 
 	m := model{list: list.New(ii, list.NewDefaultDelegate(), 0, 0)}
 	m.list.Title = title
+
+	// Use custom order-preserving filter
+	m.list.Filter = orderPreservingFilter
+
 	// This does not display the whole list to begin with
 	// m.list.SetFilterState(list.Filtering)
 	m.list.StartFiltering()

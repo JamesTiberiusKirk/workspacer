@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/JamesTiberiusKirk/workspacer/cli"
 	"github.com/JamesTiberiusKirk/workspacer/commands"
@@ -59,7 +60,15 @@ var ConfigMap cli.ConfigMapType = cli.ConfigMapType{
 	"nc,new_config": &cli.Command{
 		Description: "Creates new configuration file",
 		Runner: func(ctx cli.ConfigMapCtx) {
-			log.Info("new config to be implemented")
+			err := config.WriteDefaultConfig()
+			if err != nil {
+				log.Error("Failed to create config: %s", err.Error())
+				return
+			}
+
+			configPath, _ := config.GetDefaultConfigPath()
+			log.Info("Created default config at: %s", configPath)
+			log.Info("Edit this file to configure your workspaces")
 		},
 	},
 
@@ -180,6 +189,109 @@ var ConfigMap cli.ConfigMapType = cli.ConfigMapType{
 	"n,new": &cli.Command{
 		Description: "New project in the workspace project folder.",
 		Runner:      cli.MiddlewareCommon(commands.RunNewCommand),
+	},
+
+	"cache": &cli.Command{
+		Description: "Cache management commands. Usage: cache [clear|status]",
+		Runner: cli.MiddlewareCommon(func(ctx cli.ConfigMapCtx) {
+			if len(ctx.Args) < 2 {
+				log.Info("Usage: cache [clear|status]")
+				log.Info("  clear  - Clear cache for current workspace")
+				log.Info("  status - Show cache statistics")
+				return
+			}
+
+			subcommand := ctx.Args[1]
+			switch subcommand {
+			case "clear":
+				err := workspacer.ClearCache(ctx.WorkspaceConfig)
+				if err != nil {
+					log.Error("Failed to clear cache: %s", err.Error())
+					return
+				}
+				log.Info("Cache cleared for workspace: %s", ctx.WorkspaceConfig.Name)
+
+			case "status":
+				stats, err := workspacer.GetCacheStats(ctx.WorkspaceConfig)
+				if err != nil {
+					log.Error("Failed to get cache stats: %s", err.Error())
+					return
+				}
+
+				fmt.Printf("Cache Status for workspace: %s\n", ctx.WorkspaceConfig.Name)
+				fmt.Printf("  Path: %s\n", stats["cache_path"])
+				fmt.Printf("  Exists: %v\n", stats["exists"])
+				if stats["exists"].(bool) {
+					fmt.Printf("  Size: %d bytes\n", stats["size_bytes"])
+					fmt.Printf("  Last Modified: %v\n", stats["modified"])
+					fmt.Printf("  Last Updated: %v\n", stats["last_updated"])
+					fmt.Printf("  Cached Projects: %d\n", stats["num_projects"])
+					fmt.Printf("  GitHub Repos: %d\n", stats["num_github_repos"])
+					fmt.Printf("  Recent Accesses: %d\n", stats["num_recent_accesses"])
+				}
+
+			default:
+				log.Info("Unknown subcommand: %s", subcommand)
+				log.Info("Usage: cache [clear|status]")
+			}
+		}),
+	},
+
+	"stats": &cli.Command{
+		Description: "Show workspace usage statistics",
+		Runner: cli.MiddlewareCommon(func(ctx cli.ConfigMapCtx) {
+			cache := workspacer.LoadCache(ctx.WorkspaceConfig)
+
+			if len(cache.Projects) == 0 {
+				log.Info("No usage statistics available yet")
+				return
+			}
+
+			fmt.Printf("Usage Statistics for workspace: %s\n\n", ctx.WorkspaceConfig.Name)
+
+			// Sort projects by total access count
+			type projectStat struct {
+				name   string
+				total  int
+				recent int
+			}
+			var stats []projectStat
+			for name, project := range cache.Projects {
+				stats = append(stats, projectStat{
+					name:   name,
+					total:  project.AccessCountTotal,
+					recent: project.AccessCountRecent,
+				})
+			}
+
+			// Sort by total count desc
+			sort.Slice(stats, func(i, j int) bool {
+				return stats[i].total > stats[j].total
+			})
+
+			fmt.Println("All-Time Top Projects:")
+			for i, stat := range stats {
+				if i >= 10 {
+					break
+				}
+				fmt.Printf("  %2d. %-30s Total: %3d  Recent: %3d\n", i+1, stat.name, stat.total, stat.recent)
+			}
+
+			// Sort by recent count desc
+			sort.Slice(stats, func(i, j int) bool {
+				return stats[i].recent > stats[j].recent
+			})
+
+			fmt.Println("\nRecent Activity (last 50 accesses):")
+			for i, stat := range stats {
+				if i >= 10 || stat.recent == 0 {
+					break
+				}
+				fmt.Printf("  %2d. %-30s Recent: %3d\n", i+1, stat.name, stat.recent)
+			}
+
+			fmt.Printf("\nTotal Accesses Recorded: %d\n", len(cache.RecentAccesses))
+		}),
 	},
 }
 

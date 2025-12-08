@@ -215,9 +215,11 @@ func StartOrSwitchToSession(
 	// TODO: check if the path is valid
 	// This is where the project will be cloned if config has been setup
 
-	sessionConfig := wc.Session
+	var sessionConfig config.SessionConfig
 	if wc.SessionPreset != "" {
 		sessionConfig = presets[wc.SessionPreset]
+	} else if wc.Session != nil {
+		sessionConfig = *wc.Session
 	}
 
 	windows := []gotmux.Window{}
