@@ -77,9 +77,18 @@ func MiddlewareAssertWorkspace(r Runner) Runner {
 // MiddlewareConfigInjector - gets config and injects it in the ctx
 func MiddlewareConfigInjector(r Runner) Runner {
 	return func(ctx ConfigMapCtx) {
-		// TODO: add support for loading config from a file
-		// For now this will do
-		ctx.Config = config.DefaultGlobalConfig
+		// Try to load config from file, fall back to default
+		loadedConfig, err := config.LoadFromDefaultConfigPath()
+		if err != nil {
+			log.Error("Failed to load config from file, using default: %s", err.Error())
+			ctx.Config = config.DefaultGlobalConfig
+		} else if loadedConfig == nil {
+			// Config file doesn't exist, use default
+			ctx.Config = config.DefaultGlobalConfig
+		} else {
+			// Successfully loaded config from file
+			ctx.Config = *loadedConfig
+		}
 
 		r(ctx)
 	}
