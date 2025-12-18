@@ -51,6 +51,11 @@ func Run(cm ConfigMapType) {
 			continue
 		}
 
+		// Parse flags if the command has flag definitions
+		if len(v.Flags) > 0 {
+			customCtx.ParsedFlags = ParseFlags(v.Flags, customCtx.Args)
+		}
+
 		v.Runner(customCtx)
 		return
 	}
@@ -63,6 +68,11 @@ func Run(cm ConfigMapType) {
 	if !ok {
 		fmt.Println("Command not found: ", subCommand)
 		os.Exit(1)
+	}
+
+	// Parse flags if the command has flag definitions
+	if len(command.Flags) > 0 {
+		customCtx.ParsedFlags = ParseFlags(command.Flags, customCtx.Args)
 	}
 
 	command.Runner(customCtx)

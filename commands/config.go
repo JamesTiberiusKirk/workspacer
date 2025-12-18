@@ -9,19 +9,20 @@ import (
 	"github.com/JamesTiberiusKirk/workspacer/state"
 )
 
-func RunConfigCommand(ctx cli.ConfigMapCtx) {
-	configSubcommands := cli.ConfigMapType{
-		"new": {
-			Description: "Create new default configuration file",
-			Runner:      runConfigNew,
-		},
-		"list": {
-			Description: "Show actually loaded config and environment file paths",
-			Runner:      runConfigFiles,
-		},
-	}
+// ConfigSubcommands defines the subcommands for the config command
+var ConfigSubcommands = cli.ConfigMapType{
+	"new": {
+		Description: "Create new default configuration file",
+		Runner:      runConfigNew,
+	},
+	"list": {
+		Description: "Show actually loaded config and environment file paths",
+		Runner:      runConfigFiles,
+	},
+}
 
-	cli.HandleSubcommands(ctx, configSubcommands, "Usage: config [subcommand]")
+func RunConfigCommand(ctx cli.ConfigMapCtx) {
+	cli.HandleSubcommands(ctx, ConfigSubcommands, "Usage: config [subcommand]")
 }
 
 func runConfigNew(ctx cli.ConfigMapCtx) {

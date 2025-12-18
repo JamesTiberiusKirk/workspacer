@@ -59,6 +59,7 @@ var ConfigMap cli.ConfigMapType = cli.ConfigMapType{
 	},
 	"config": &cli.Command{
 		Description: "Config management commands. Usage: config [new|files]",
+		Subcommands: commands.ConfigSubcommands, // For completion
 		Runner:      commands.RunConfigCommand,
 	},
 
@@ -283,6 +284,35 @@ var ConfigMap cli.ConfigMapType = cli.ConfigMapType{
 			fmt.Printf("\nTotal Accesses Recorded: %d\n", len(cache.RecentAccesses))
 		}),
 	},
+
+	// Completion command is added after ConfigMap is defined (see below)
+	// "completion": cli.MakeCompletionCommand(ConfigMap, "workspacer"),
+
+	"__complete_workspaces": &cli.Command{
+		Description: "", // Hidden command for completion
+		Runner: func(ctx cli.ConfigMapCtx) {
+			// Load config and print workspace names for completion
+			loadedConfig, err := config.LoadFromDefaultConfigPath()
+			if err != nil || loadedConfig == nil {
+				return
+			}
+			for name := range loadedConfig.Workspaces {
+				fmt.Println(name)
+			}
+		},
+	},
+}
+
+func init() {
+	// Configure global flags for this application
+	cli.GlobalFlags = []cli.Flag{
+		{Name: "workspace", Short: "W", Description: "Specify workspace", Type: "string"},
+		{Name: "debug", Short: "D", Description: "Debug mode", Type: "bool"},
+		{Name: "help", Short: "h", Description: "Show help", Type: "bool"},
+	}
+
+	// Add completion command that introspects the ConfigMap
+	ConfigMap["completion"] = cli.MakeCompletionCommand(ConfigMap, "workspacer")
 }
 
 func main() {

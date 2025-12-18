@@ -14,12 +14,59 @@ type ConfigMapCtx struct {
 	Project         string
 	WorkspaceConfig config.WorkspaceConfig
 	Config          config.GlobalUserConfig
+	ParsedFlags     *FlagValues // Parsed flag values from command's flag definitions
+}
+
+// GetBoolFlag returns a boolean flag value
+// Panics if the flag doesn't exist in the command's flag definitions
+func (ctx ConfigMapCtx) GetBoolFlag(name string) bool {
+	if ctx.ParsedFlags == nil {
+		panic("no flags parsed for this command")
+	}
+	return ctx.ParsedFlags.Bool(name)
+}
+
+// GetStringFlag returns a string flag value
+// Panics if the flag doesn't exist in the command's flag definitions
+func (ctx ConfigMapCtx) GetStringFlag(name string) string {
+	if ctx.ParsedFlags == nil {
+		panic("no flags parsed for this command")
+	}
+	return ctx.ParsedFlags.String(name)
+}
+
+// GetIntFlag returns an int flag value
+// Panics if the flag doesn't exist in the command's flag definitions
+func (ctx ConfigMapCtx) GetIntFlag(name string) int {
+	if ctx.ParsedFlags == nil {
+		panic("no flags parsed for this command")
+	}
+	return ctx.ParsedFlags.Int(name)
+}
+
+// GetFlagArgs returns the remaining non-flag arguments
+func (ctx ConfigMapCtx) GetFlagArgs() []string {
+	if ctx.ParsedFlags == nil {
+		return ctx.Args
+	}
+	return ctx.ParsedFlags.Args()
 }
 
 type Runner func(ctx ConfigMapCtx)
+
+type Flag struct {
+	Name        string // Long name (e.g., "workspace")
+	Short       string // Short name (e.g., "W"), optional
+	Description string
+	Type        string // "string", "bool", "int"
+	Default     string // Default value as string
+}
+
 type Command struct {
 	Description string
 	Help        string
+	Flags       []Flag        // Declarative flag definitions
+	Subcommands ConfigMapType // Optional: for commands with subcommands (enables completion)
 	Runner      Runner
 }
 
@@ -33,6 +80,14 @@ const (
 	// When command is not in list
 	CommandTypeDefault = "default"
 )
+
+// GlobalFlags defines flags that are available for all commands.
+// Applications using this CLI library should set this before calling Run().
+// Example:
+//   cli.GlobalFlags = []cli.Flag{
+//       {Name: "verbose", Short: "v", Description: "Verbose output", Type: "bool"},
+//   }
+var GlobalFlags = []Flag{}
 
 // HandleSubcommands routes to subcommands or prints help if no valid subcommand found.
 // This is the main function to use for handling subcommands - it automatically:
