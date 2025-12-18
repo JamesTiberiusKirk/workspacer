@@ -10,6 +10,7 @@ import (
 
 	"github.com/JamesTiberiusKirk/workspacer/config"
 	"github.com/JamesTiberiusKirk/workspacer/log"
+	"github.com/JamesTiberiusKirk/workspacer/state"
 	"github.com/joho/godotenv"
 	gotmux "github.com/jubnzv/go-tmux"
 )
@@ -30,6 +31,7 @@ func LoadEnvFile(wc config.WorkspaceConfig) {
 			path = homeDir + "/" + envFileName
 		} else {
 			log.Debug("No .workspace.env file found in workspace or home directory")
+			state.LoadedEnvPath = "" // No env file loaded
 			return
 		}
 	}
@@ -38,6 +40,8 @@ func LoadEnvFile(wc config.WorkspaceConfig) {
 	if err != nil {
 		panic(err)
 	}
+
+	state.LoadedEnvPath = path // Record which env file was loaded
 }
 
 func GetOpenProjectsByWorkspace(wsPrefix string) []string {

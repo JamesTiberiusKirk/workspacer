@@ -57,19 +57,9 @@ var ConfigMap cli.ConfigMapType = cli.ConfigMapType{
 			)
 		}),
 	},
-	"nc,new_config": &cli.Command{
-		Description: "Creates new configuration file",
-		Runner: func(ctx cli.ConfigMapCtx) {
-			err := config.WriteDefaultConfig()
-			if err != nil {
-				log.Error("Failed to create config: %s", err.Error())
-				return
-			}
-
-			configPath, _ := config.GetDefaultConfigPath()
-			log.Info("Created default config at: %s", configPath)
-			log.Info("Edit this file to configure your workspaces")
-		},
+	"config": &cli.Command{
+		Description: "Config management commands. Usage: config [new|files]",
+		Runner:      commands.RunConfigCommand,
 	},
 
 	"c,clone": &cli.Command{

@@ -8,6 +8,7 @@ import (
 
 	"github.com/JamesTiberiusKirk/workspacer/config"
 	"github.com/JamesTiberiusKirk/workspacer/log"
+	"github.com/JamesTiberiusKirk/workspacer/state"
 	"github.com/JamesTiberiusKirk/workspacer/util"
 	"github.com/jubnzv/go-tmux"
 )
@@ -82,12 +83,16 @@ func MiddlewareConfigInjector(r Runner) Runner {
 		if err != nil {
 			log.Error("Failed to load config from file, using default: %s", err.Error())
 			ctx.Config = config.DefaultGlobalConfig
+			state.LoadedConfigPath = "" // Using defaults, not loaded from file
 		} else if loadedConfig == nil {
 			// Config file doesn't exist, use default
 			ctx.Config = config.DefaultGlobalConfig
+			state.LoadedConfigPath = "" // Using defaults, not loaded from file
 		} else {
 			// Successfully loaded config from file
 			ctx.Config = *loadedConfig
+			configPath, _ := config.GetDefaultConfigPath()
+			state.LoadedConfigPath = configPath
 		}
 
 		r(ctx)
