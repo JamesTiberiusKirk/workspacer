@@ -30,7 +30,7 @@ func NewAPIProvider() *APIProvider {
 func (p *APIProvider) GetRepoNames(login string, isOrg bool) ([]string, error) {
 	token := os.Getenv("GITHUB_AUTH")
 	if token == "" {
-		return []string{}, nil
+		return nil, fmt.Errorf("GITHUB_AUTH environment variable is not set")
 	}
 
 	src := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
@@ -97,10 +97,6 @@ func (p *APIProvider) GetRepoNames(login string, isOrg bool) ([]string, error) {
 
 			err := client.Query(context.Background(), &query, vars)
 			if err != nil {
-				if isNetworkError(err) {
-					return []string{}, nil
-				}
-
 				return nil, fmt.Errorf("GitHub GraphQL user query failed: %w", err)
 			}
 

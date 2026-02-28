@@ -329,6 +329,15 @@ func ChoseProjectFromLocalWorkspace(workspace string, wc config.WorkspaceConfig,
 			})
 		}
 
+		// Add empty remote repos indicator
+		if wc.EnableRemoteRepos && !remoteError && len(remoteRepos) == 0 {
+			folders = append(folders, list.Item{
+				Display:  "No remote repositories found",
+				Value:    "error:no-remote-repos",
+				Subtitle: "No repositories found on GitHub for this workspace",
+			})
+		}
+
 		// Add remote repos
 		for _, remoteRepo := range remoteRepos {
 			folders = append(folders, list.Item{

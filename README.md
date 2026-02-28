@@ -317,15 +317,22 @@ workspacer -W=current actions
 
 ### Custom Aliases
 
-Add to your `~/.zshrc`:
+Add to your `~/.zshrc` (order matters):
 
 ```bash
-# Define aliases
+# 1. Add completion directory to fpath (BEFORE compinit)
+fpath=(~/.zsh/completion $fpath)
+
+# 2. Initialize completion system
+autoload -Uz compinit
+compinit
+
+# 3. Define your aliases
 alias ws="workspacer -W=personal"
 alias work="workspacer -W=work"
 alias side="workspacer -W=sideprojects"
 
-# Enable completion for aliases
+# 4. Enable completion for aliases (AFTER compinit)
 compdef ws=workspacer
 compdef work=workspacer
 compdef side=workspacer

@@ -2,10 +2,7 @@ package workspacer
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,27 +45,7 @@ func newGitHubClient() *github.Client {
 // 	return ghGraphQlClient
 // }
 
-func isNetworkError(err error) bool {
-	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return true
-	}
 
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		return true
-	}
-
-	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-		return true
-	}
-
-	var opErr *net.OpError
-	if errors.As(err, &opErr) {
-		return true
-	}
-	return false
-}
 
 // GetRepoNames fetches repository names using the configured GitHub provider
 func GetRepoNames(wc config.WorkspaceConfig) ([]string, error) {
@@ -104,9 +81,6 @@ func GetReposByOrg(userOrOrg string, isOrg bool) ([]*github.Repository, error) {
 		}
 
 		if err != nil {
-			if isNetworkError(err) {
-				return []*github.Repository{}, nil
-			}
 			return nil, fmt.Errorf("GitHub API error: %w", err)
 		}
 
@@ -144,9 +118,6 @@ func GetMyRepos() ([]*github.Repository, error) {
 		opts.Page = page
 		repos, resp, err := client.Repositories.ListByAuthenticatedUser(ctx, opts)
 		if err != nil {
-			if isNetworkError(err) {
-				return []*github.Repository{}, nil
-			}
 			return nil, fmt.Errorf("failed to list repos: %w", err)
 		}
 		allRepos = append(allRepos, repos...)

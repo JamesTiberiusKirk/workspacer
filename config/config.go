@@ -174,26 +174,14 @@ func LoadGlobalConfig(path string) (*GlobalUserConfig, error) {
 func LoadFromDefaultConfigPath() (*GlobalUserConfig, error) {
 	fmt.Println("Loading global config")
 
-	homeDir, err := os.UserHomeDir()
+	configPath, err := GetDefaultConfigPath()
 	if err != nil {
-		fmt.Printf("Error getting home dir: %s\n", err.Error())
 		return nil, err
 	}
-
-	_, err = os.Stat(homeDir + defaultConfigPath)
-	if err != nil {
-		if !os.IsExist(err) {
-			return nil, nil
-		}
-		fmt.Printf("Error getting stat on default config path: %s\n", err.Error())
-		return nil, err
-	}
-
-	configPath := homeDir + defaultConfigPath + defaultConfigFile
 
 	_, err = os.Stat(configPath)
 	if err != nil {
-		if os.IsExist(err) {
+		if os.IsNotExist(err) {
 			return nil, nil
 		}
 		return nil, err
