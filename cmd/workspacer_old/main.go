@@ -79,7 +79,8 @@ func main() {
 		if strings.Contains(name, "-") {
 			opts.Workspace = strings.Split(name, "-")[0]
 		} else {
-			opts.Workspace = config.DefaultGlobalConfig.DefaultWorkspace
+			log.Error("could not determine workspace from session name")
+			return
 		}
 	}
 
@@ -90,7 +91,13 @@ func main() {
 	// 	return
 	// }
 
-	workspaceConfig, _ := config.DefaultGlobalConfig.Workspaces[opts.Workspace]
+	loadedConfig, err := config.LoadFromDefaultConfigPath()
+	if err != nil || loadedConfig == nil {
+		log.Error("No config file found. Run 'workspacer config new' to create one.")
+		os.Exit(1)
+	}
+
+	workspaceConfig, _ := loadedConfig.Workspaces[opts.Workspace]
 	// if !ok {
 	// 	log.Error("workspace %s not found", opts.Workspace)
 	// 	return
@@ -118,7 +125,7 @@ func main() {
 		// try and open the directory
 		workspacer.StartOrSwitchToSession(
 			workspaceConfig,
-			config.DefaultGlobalConfig.SessionPresets,
+			loadedConfig.SessionPresets,
 			choise,
 		)
 		return
@@ -145,7 +152,7 @@ func main() {
 			}
 		}
 
-		workspacer.SearchGithubInUserOrOrg(opts.Workspace, searchArgs)
+		workspacer.SearchGithubInUserOrOrg(workspaceConfig.GithubOrg, searchArgs)
 	case "a", "actions":
 		mainBranch := util.GetGitMainBranch(workspaceConfig, args[1])
 
@@ -169,7 +176,7 @@ func main() {
 
 		fmt.Println("Branches: ", branches)
 
-		results := workspacer.GetWorkFlowsStatus(opts.Workspace, args[1], branches...)
+		results := workspacer.GetWorkFlowsStatus(workspaceConfig, args[1], branches...)
 		for _, r := range results {
 			fmt.Println(r)
 		}
@@ -177,7 +184,7 @@ func main() {
 	case "o", "open":
 		workspacer.ChooseFromOpenWorkspaceProjectsAndSwitch(opts.Workspace,
 			workspaceConfig,
-			config.DefaultGlobalConfig.SessionPresets,
+			loadedConfig.SessionPresets,
 		)
 
 	case "CA", "close-all":
@@ -194,7 +201,7 @@ func main() {
 		}
 
 		sessionPreset := args[1]
-		workspacer.StartOrSwitchToTmuxPreset("dots", "", config.DefaultGlobalConfig.SessionPresets[sessionPreset])
+		workspacer.StartOrSwitchToTmuxPreset("dots", "", loadedConfig.SessionPresets[sessionPreset])
 
 	case "new":
 		if len(args) < 2 {
@@ -248,7 +255,7 @@ func main() {
 
 		workspacer.StartOrSwitchToSession(
 			workspaceConfig,
-			config.DefaultGlobalConfig.SessionPresets,
+			loadedConfig.SessionPresets,
 			name,
 		)
 
@@ -256,7 +263,7 @@ func main() {
 		// try and open the directory
 		workspacer.StartOrSwitchToSession(
 			workspaceConfig,
-			config.DefaultGlobalConfig.SessionPresets,
+			loadedConfig.SessionPresets,
 			args[0],
 		)
 	}

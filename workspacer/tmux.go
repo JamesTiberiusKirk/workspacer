@@ -81,6 +81,13 @@ func StartOrSwitchToTmuxPreset(name string, basePath string, preset config.Sessi
 
 		if w.Path == "" {
 			w.Path = basePath
+		} else {
+			expanded, err := util.ExpandTilde(w.Path)
+			if err != nil {
+				fmt.Printf("Error expanding path %s: %s\n", w.Path, err)
+				return
+			}
+			w.Path = expanded
 		}
 
 		window := gotmux.Window{

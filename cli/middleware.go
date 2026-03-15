@@ -78,22 +78,22 @@ func MiddlewareAssertWorkspace(r Runner) Runner {
 // MiddlewareConfigInjector - gets config and injects it in the ctx
 func MiddlewareConfigInjector(r Runner) Runner {
 	return func(ctx ConfigMapCtx) {
-		// Try to load config from file, fall back to default
 		loadedConfig, err := config.LoadFromDefaultConfigPath()
 		if err != nil {
-			log.Error("Failed to load config from file, using default: %s", err.Error())
-			ctx.Config = config.DefaultGlobalConfig
-			state.LoadedConfigPath = "" // Using defaults, not loaded from file
-		} else if loadedConfig == nil {
-			// Config file doesn't exist, use default
-			ctx.Config = config.DefaultGlobalConfig
-			state.LoadedConfigPath = "" // Using defaults, not loaded from file
-		} else {
-			// Successfully loaded config from file
-			ctx.Config = *loadedConfig
-			configPath, _ := config.GetDefaultConfigPath()
-			state.LoadedConfigPath = configPath
+			log.Error("Failed to load config: %s", err.Error())
+			fmt.Println("Run 'workspacer config new' to create a config file")
+			os.Exit(1)
 		}
+		if loadedConfig == nil {
+			configPath, _ := config.GetDefaultConfigPath()
+			log.Error("No config file found at %s", configPath)
+			fmt.Println("Run 'workspacer config new' to create a config file")
+			os.Exit(1)
+		}
+
+		ctx.Config = *loadedConfig
+		configPath, _ := config.GetDefaultConfigPath()
+		state.LoadedConfigPath = configPath
 
 		r(ctx)
 	}

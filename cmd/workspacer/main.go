@@ -118,7 +118,7 @@ var ConfigMap cli.ConfigMapType = cli.ConfigMapType{
 			}
 
 			fmt.Println("Branches: ", branches)
-			results := workspacer.GetWorkFlowsStatus(ctx.WorkspaceConfig.Prefix, ctx.Project, branches...)
+			results := workspacer.GetWorkFlowsStatus(ctx.WorkspaceConfig, ctx.Project, branches...)
 			for _, r := range results {
 				fmt.Println(r)
 			}
@@ -130,7 +130,7 @@ var ConfigMap cli.ConfigMapType = cli.ConfigMapType{
 		Runner: cli.MiddlewareCommon(func(ctx cli.ConfigMapCtx) {
 			workspacer.ChooseFromOpenWorkspaceProjectsAndSwitch(ctx.WorkspaceConfig.Prefix,
 				ctx.WorkspaceConfig,
-				config.DefaultGlobalConfig.SessionPresets,
+				ctx.Config.SessionPresets,
 			)
 		}),
 	},
@@ -161,20 +161,21 @@ var ConfigMap cli.ConfigMapType = cli.ConfigMapType{
 
 	"from-preset": &cli.Command{
 		Description: "Open up a preset as a project. I.E. a preset for editing dot files which might be defined in session presets section",
-		Runner: func(ctx cli.ConfigMapCtx) {
+		Runner: cli.MiddlewareConfigInjector(func(ctx cli.ConfigMapCtx) {
 			if len(ctx.Args) < 2 {
-				fmt.Println("Need to provide the name of a new repo")
+				fmt.Println("Need to provide the name of a preset")
 				return
 			}
 
 			sessionPreset := ctx.Args[1]
-			preset, ok := config.DefaultGlobalConfig.SessionPresets[sessionPreset]
+			preset, ok := ctx.Config.SessionPresets[sessionPreset]
 			if !ok {
-
+				fmt.Printf("Session preset not found: %s\n", sessionPreset)
+				return
 			}
 
 			workspacer.StartOrSwitchToTmuxPreset(sessionPreset, preset.Path, preset)
-		},
+		}),
 	},
 
 	"n,new": &cli.Command{

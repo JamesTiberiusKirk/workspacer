@@ -138,11 +138,10 @@ func GetMyRepos() ([]*github.Repository, error) {
 	return filteredRepos, nil
 }
 
-func SearchGithubInUserOrOrg(userOrOrg, search string) {
-	wc := config.DefaultGlobalConfig.Workspaces[userOrOrg]
+func SearchGithubInUserOrOrg(githubOrg, search string) {
 	client := newGitHubClient()
 
-	searchResp, githubResp, err := client.Search.Code(context.Background(), search+" org:"+wc.GithubOrg, &github.SearchOptions{
+	searchResp, githubResp, err := client.Search.Code(context.Background(), search+" org:"+githubOrg, &github.SearchOptions{
 		TextMatch: true,
 		ListOptions: github.ListOptions{
 			PerPage: 100,
@@ -189,13 +188,9 @@ func SearchGithubInUserOrOrg(userOrOrg, search string) {
 	}
 }
 
-func GetWorkFlowsStatus(workspace string, repo string, branches ...string) []string {
+func GetWorkFlowsStatus(wc config.WorkspaceConfig, repo string, branches ...string) []string {
 	result := []string{}
 	for _, branch := range branches {
-		wc, ok := config.DefaultGlobalConfig.Workspaces[workspace]
-		if !ok {
-			continue
-		}
 		client := newGitHubClient()
 		owner := wc.GithubOrg
 

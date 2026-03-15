@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/JamesTiberiusKirk/workspacer/cli"
-	"github.com/JamesTiberiusKirk/workspacer/config"
 	"github.com/JamesTiberiusKirk/workspacer/workspacer"
 )
 
@@ -50,7 +49,7 @@ func RunNewCommand(ctx cli.ConfigMapCtx) {
 
 	workspacer.StartOrSwitchToSession(
 		ctx.WorkspaceConfig,
-		config.DefaultGlobalConfig.SessionPresets,
+		ctx.Config.SessionPresets,
 		name,
 	)
 }
