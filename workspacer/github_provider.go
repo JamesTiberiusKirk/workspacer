@@ -15,7 +15,7 @@ import (
 
 // GitHubProvider is an interface for fetching GitHub repository information
 type GitHubProvider interface {
-	GetRepoNames(login string, isOrg bool) ([]string, error)
+	GetRepoNames(login string, isOrg bool, showArchived bool) ([]string, error)
 }
 
 // APIProvider uses the GitHub GraphQL API
@@ -27,7 +27,7 @@ func NewAPIProvider() *APIProvider {
 }
 
 // GetRepoNames fetches repository names using the GitHub GraphQL API
-func (p *APIProvider) GetRepoNames(login string, isOrg bool) ([]string, error) {
+func (p *APIProvider) GetRepoNames(login string, isOrg bool, showArchived bool) ([]string, error) {
 	token := os.Getenv("GITHUB_AUTH")
 	if token == "" {
 		return nil, fmt.Errorf("GITHUB_AUTH environment variable is not set")
@@ -46,7 +46,8 @@ func (p *APIProvider) GetRepoNames(login string, isOrg bool) ([]string, error) {
 				Organization struct {
 					Repositories struct {
 						Nodes []struct {
-							Name string
+							Name       string
+							IsArchived bool
 						}
 						PageInfo struct {
 							HasNextPage bool
@@ -67,6 +68,9 @@ func (p *APIProvider) GetRepoNames(login string, isOrg bool) ([]string, error) {
 			}
 
 			for _, node := range query.Organization.Repositories.Nodes {
+				if !showArchived && node.IsArchived {
+					continue
+				}
 				allRepoNames = append(allRepoNames, node.Name)
 			}
 
@@ -80,7 +84,8 @@ func (p *APIProvider) GetRepoNames(login string, isOrg bool) ([]string, error) {
 				User struct {
 					Repositories struct {
 						Nodes []struct {
-							Name string
+							Name       string
+							IsArchived bool
 						}
 						PageInfo struct {
 							HasNextPage bool
@@ -101,6 +106,9 @@ func (p *APIProvider) GetRepoNames(login string, isOrg bool) ([]string, error) {
 			}
 
 			for _, node := range query.User.Repositories.Nodes {
+				if !showArchived && node.IsArchived {
+					continue
+				}
 				allRepoNames = append(allRepoNames, node.Name)
 			}
 
@@ -123,7 +131,7 @@ func NewCLIProvider() *CLIProvider {
 }
 
 // GetRepoNames fetches repository names using the GitHub CLI
-func (p *CLIProvider) GetRepoNames(login string, isOrg bool) ([]string, error) {
+func (p *CLIProvider) GetRepoNames(login string, isOrg bool, showArchived bool) ([]string, error) {
 	// Check if gh CLI is installed
 	if _, err := exec.LookPath("gh"); err != nil {
 		return nil, fmt.Errorf("gh CLI not found: %w", err)
@@ -131,9 +139,9 @@ func (p *CLIProvider) GetRepoNames(login string, isOrg bool) ([]string, error) {
 
 	var cmd *exec.Cmd
 	if isOrg {
-		cmd = exec.Command("gh", "repo", "list", login, "--json", "name", "--limit", "1000")
+		cmd = exec.Command("gh", "repo", "list", login, "--json", "name,isArchived", "--limit", "1000")
 	} else {
-		cmd = exec.Command("gh", "repo", "list", login, "--json", "name", "--limit", "1000")
+		cmd = exec.Command("gh", "repo", "list", login, "--json", "name,isArchived", "--limit", "1000")
 	}
 
 	output, err := cmd.CombinedOutput()
@@ -143,22 +151,26 @@ func (p *CLIProvider) GetRepoNames(login string, isOrg bool) ([]string, error) {
 
 	// Parse JSON output
 	var repos []struct {
-		Name string `json:"name"`
+		Name       string `json:"name"`
+		IsArchived bool   `json:"isArchived"`
 	}
 
 	if err := json.Unmarshal(output, &repos); err != nil {
 		return nil, fmt.Errorf("failed to parse gh CLI output: %w", err)
 	}
 
-	repoNames := make([]string, len(repos))
-	for i, repo := range repos {
-		// gh CLI returns full names like "owner/repo", we only want "repo"
-		parts := strings.Split(repo.Name, "/")
-		if len(parts) > 1 {
-			repoNames[i] = parts[1]
-		} else {
-			repoNames[i] = repo.Name
+	var repoNames []string
+	for _, repo := range repos {
+		if !showArchived && repo.IsArchived {
+			continue
 		}
+		// gh CLI returns full names like "owner/repo", we only want "repo"
+		name := repo.Name
+		parts := strings.Split(name, "/")
+		if len(parts) > 1 {
+			name = parts[1]
+		}
+		repoNames = append(repoNames, name)
 	}
 
 	return repoNames, nil

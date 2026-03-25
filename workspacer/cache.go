@@ -36,8 +36,9 @@ type AccessRecord struct {
 type WorkspaceCache struct {
 	LastUpdated        time.Time                `json:"last_updated"`
 	Projects           map[string]ProjectCache  `json:"projects"`
-	GithubRepos        []string                 `json:"github_repos,omitempty"`
-	GithubReposUpdated time.Time                `json:"github_repos_updated,omitempty"`
+	GithubRepos            []string                 `json:"github_repos,omitempty"`
+	GithubReposUpdated     time.Time                `json:"github_repos_updated,omitempty"`
+	GithubReposShowArchived bool                    `json:"github_repos_show_archived,omitempty"`
 	RecentAccesses     []AccessRecord           `json:"recent_accesses"`
 }
 
@@ -125,9 +126,10 @@ func (c *WorkspaceCache) UpdateGitInfo(projectName string, info repoGitInfo) {
 }
 
 // UpdateGithubRepos updates the GitHub repos list in the cache
-func (c *WorkspaceCache) UpdateGithubRepos(repos []string) {
+func (c *WorkspaceCache) UpdateGithubRepos(repos []string, showArchived bool) {
 	c.GithubRepos = repos
 	c.GithubReposUpdated = time.Now()
+	c.GithubReposShowArchived = showArchived
 }
 
 // RecordAccess records a project access and updates usage statistics

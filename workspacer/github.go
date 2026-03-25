@@ -50,10 +50,10 @@ func newGitHubClient() *github.Client {
 // GetRepoNames fetches repository names using the configured GitHub provider
 func GetRepoNames(wc config.WorkspaceConfig) ([]string, error) {
 	provider := GetProvider(wc)
-	return provider.GetRepoNames(wc.GithubOrg, wc.IsOrg)
+	return provider.GetRepoNames(wc.GithubOrg, wc.IsOrg, wc.ShowArchivedRepos)
 }
 
-func GetReposByOrg(userOrOrg string, isOrg bool) ([]*github.Repository, error) {
+func GetReposByOrg(userOrOrg string, isOrg bool, showArchived bool) ([]*github.Repository, error) {
 	client := newGitHubClient()
 	ctx := context.Background()
 
@@ -92,6 +92,10 @@ func GetReposByOrg(userOrOrg string, isOrg bool) ([]*github.Repository, error) {
 		page = resp.NextPage
 	}
 
+	if showArchived {
+		return allRepos, nil
+	}
+
 	// Filter out archived repos
 	var filteredRepos []*github.Repository
 	for _, repo := range allRepos {
@@ -103,7 +107,7 @@ func GetReposByOrg(userOrOrg string, isOrg bool) ([]*github.Repository, error) {
 	return filteredRepos, nil
 }
 
-func GetMyRepos() ([]*github.Repository, error) {
+func GetMyRepos(showArchived bool) ([]*github.Repository, error) {
 	client := newGitHubClient()
 	ctx := context.Background()
 
@@ -125,6 +129,10 @@ func GetMyRepos() ([]*github.Repository, error) {
 			break
 		}
 		page = resp.NextPage
+	}
+
+	if showArchived {
+		return allRepos, nil
 	}
 
 	// Filter out archived repos

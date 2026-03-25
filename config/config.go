@@ -55,6 +55,7 @@ type WorkspaceConfig struct {
 	EnableCache         bool            `yaml:"enable_cache,omitempty"`
 	EnableUsageTracking bool            `yaml:"enable_usage_tracking,omitempty"`
 	RecentAccessWindow  int             `yaml:"recent_access_window,omitempty"` // Default: 50
+	ShowArchivedRepos   bool            `yaml:"show_archived_repos,omitempty"`
 }
 
 type PanesConfig struct {

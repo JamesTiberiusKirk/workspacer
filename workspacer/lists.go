@@ -221,8 +221,9 @@ func ChoseProjectFromLocalWorkspace(workspace string, wc config.WorkspaceConfig,
 		var remoteRepos []string
 		remoteError := false
 		if wc.EnableRemoteRepos {
-			// Try cache first
-			if wc.EnableCache && len(cache.GithubRepos) > 0 {
+			// Try cache first, but invalidate if show_archived_repos setting changed
+			cacheValid := wc.EnableCache && len(cache.GithubRepos) > 0 && cache.GithubReposShowArchived == wc.ShowArchivedRepos
+			if cacheValid {
 				remoteRepos = cache.GithubRepos
 			} else {
 				// Fetch fresh data
@@ -232,7 +233,7 @@ func ChoseProjectFromLocalWorkspace(workspace string, wc config.WorkspaceConfig,
 					remoteError = true
 				} else {
 					remoteRepos = repos
-					cache.UpdateGithubRepos(repos)
+					cache.UpdateGithubRepos(repos, wc.ShowArchivedRepos)
 				}
 			}
 		}
