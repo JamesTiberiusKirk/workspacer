@@ -12,6 +12,11 @@ import (
 	gotmux "github.com/jubnzv/go-tmux"
 )
 
+// sanitizeTmuxName replaces characters that tmux does not allow in session names.
+func sanitizeTmuxName(name string) string {
+	return strings.ReplaceAll(name, ".", "_")
+}
+
 func CloseAllSessionsInWorkspace(wc config.WorkspaceConfig) {
 	server := new(gotmux.Server)
 	sessions, err := server.ListSessions()
@@ -37,6 +42,7 @@ func CloseAllSessionsInWorkspace(wc config.WorkspaceConfig) {
 }
 
 func StartOrSwitchToTmuxPreset(name string, basePath string, preset config.SessionConfig) {
+	name = sanitizeTmuxName(name)
 	server := new(gotmux.Server)
 	sessions, _ := server.ListSessions()
 	if len(sessions) > 0 {
@@ -182,10 +188,10 @@ func StartOrSwitchToSession(
 		return
 	}
 
-	sessionName := project
+	sessionName := sanitizeTmuxName(project)
 
 	if wc.Prefix != "" {
-		sessionName = wc.Prefix + "-" + sessionName
+		sessionName = sanitizeTmuxName(wc.Prefix) + "-" + sessionName
 	}
 
 	server := new(gotmux.Server)
