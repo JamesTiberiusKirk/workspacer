@@ -198,37 +198,26 @@ func ExpandTilde(path string) (string, error) {
 	return path, nil
 }
 
-// IsServiceRepo checks if a project is a service repo (not a tenant/infrastructure repo)
-func IsServiceRepo(wc config.WorkspaceConfig, project string) bool {
-	if wc.TenantRepoPrefix == "" {
-		return true
+// GetSisterReposForProject returns the sister repos configured for a project
+func GetSisterReposForProject(wc config.WorkspaceConfig, projectName string) []config.SisterRepoConfig {
+	for _, p := range wc.Projects {
+		if p.Name == projectName {
+			return p.SisterRepos
+		}
 	}
-	return !strings.HasPrefix(project, wc.TenantRepoPrefix)
+	return nil
 }
 
-// GetTenantRepoName constructs the tenant repo name from a service name
-func GetTenantRepoName(wc config.WorkspaceConfig, serviceName string) string {
-	if wc.TenantRepoPrefix == "" {
-		return ""
+// IsSisterRepo checks if a repo name is a sister repo of any project in the workspace
+func IsSisterRepo(wc config.WorkspaceConfig, repoName string) bool {
+	for _, p := range wc.Projects {
+		for _, sr := range p.SisterRepos {
+			if sr.Name == repoName {
+				return true
+			}
+		}
 	}
-	return wc.TenantRepoPrefix + serviceName
-}
-
-// GetServiceRepoName extracts the service name from a tenant repo name
-func GetServiceRepoName(wc config.WorkspaceConfig, tenantRepoName string) string {
-	if wc.TenantRepoPrefix == "" {
-		return tenantRepoName
-	}
-	return strings.TrimPrefix(tenantRepoName, wc.TenantRepoPrefix)
-}
-
-// DoesTenantRepoExist checks if the corresponding tenant repo exists for a service
-func DoesTenantRepoExist(wc config.WorkspaceConfig, serviceName string) bool {
-	if !wc.EnableTenantRepos || wc.TenantRepoPrefix == "" {
-		return false
-	}
-	tenantRepoName := GetTenantRepoName(wc, serviceName)
-	return DoesProjectExist(wc, tenantRepoName)
+	return false
 }
 
 // GetGitBranch returns the current git branch for a project, or empty string if not a git repo

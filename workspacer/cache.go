@@ -16,14 +16,19 @@ const (
 	cacheFileName = ".workspacer-cache.json"
 )
 
+// SisterCache holds cached git information for a sister repo
+type SisterCache struct {
+	Branch  string `json:"branch"`
+	Changes int    `json:"changes"`
+}
+
 // ProjectCache holds cached information for a single project
 type ProjectCache struct {
-	GitBranch         string `json:"git_branch,omitempty"`
-	GitChanges        int    `json:"git_changes,omitempty"`
-	TenantBranch      string `json:"tenant_branch,omitempty"`
-	TenantChanges     int    `json:"tenant_changes,omitempty"`
-	AccessCountTotal  int    `json:"access_count_total"`
-	AccessCountRecent int    `json:"access_count_recent"`
+	GitBranch         string                 `json:"git_branch,omitempty"`
+	GitChanges        int                    `json:"git_changes,omitempty"`
+	SisterRepos       map[string]SisterCache `json:"sister_repos,omitempty"`
+	AccessCountTotal  int                    `json:"access_count_total"`
+	AccessCountRecent int                    `json:"access_count_recent"`
 }
 
 // AccessRecord tracks a single project access
@@ -117,9 +122,17 @@ func (c *WorkspaceCache) UpdateGitInfo(projectName string, info repoGitInfo) {
 
 	project.GitBranch = info.branch
 	project.GitChanges = info.changesCount
-	if info.hasTenant {
-		project.TenantBranch = info.tenantBranch
-		project.TenantChanges = info.tenantChanges
+
+	if len(info.sisters) > 0 {
+		project.SisterRepos = make(map[string]SisterCache, len(info.sisters))
+		for _, sister := range info.sisters {
+			project.SisterRepos[sister.label] = SisterCache{
+				Branch:  sister.branch,
+				Changes: sister.changes,
+			}
+		}
+	} else {
+		project.SisterRepos = nil
 	}
 
 	c.Projects[projectName] = project

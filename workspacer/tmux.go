@@ -260,25 +260,64 @@ func StartOrSwitchToSession(
 		windows = append(windows, window)
 	}
 
-	// Check if we should add a tenant repo window
-	if wc.EnableTenantRepos &&
-		util.IsServiceRepo(wc, project) &&
-		util.DoesTenantRepoExist(wc, project) {
-		tenantRepoName := util.GetTenantRepoName(wc, project)
-		tenantPath := filepath.Join(util.GetWorkspacePath(wc), tenantRepoName)
+	// Add windows for sister repos
+	type sisterWindowInfo struct {
+		paneConfigs []config.PanesConfig
+	}
+	var sisterWindowsMeta []sisterWindowInfo
 
-		// Create a simple window with one pane for the tenant repo
-		panes := []gotmux.Pane{{}}
-
-		tenantWindow := gotmux.Window{
-			Id:             len(windows) + 1,
-			Name:           "tenant",
-			Layout:         gotmux.LayoutEvenHorizontal,
-			Panes:          panes,
-			StartDirectory: tenantPath,
+	sisterRepos := util.GetSisterReposForProject(wc, project)
+	for _, sr := range sisterRepos {
+		if !util.DoesProjectExist(wc, sr.Name) {
+			continue
 		}
 
-		windows = append(windows, tenantWindow)
+		sisterPath := filepath.Join(util.GetWorkspacePath(wc), sr.Name)
+
+		var sisterSessionConfig config.SessionConfig
+		if sr.SessionPreset != "" {
+			if preset, ok := presets[sr.SessionPreset]; ok {
+				sisterSessionConfig = preset
+			}
+		}
+
+		if len(sisterSessionConfig.Windows) > 0 {
+			for i, w := range sisterSessionConfig.Windows {
+				var panes []gotmux.Pane
+				for range w.Panes {
+					panes = append(panes, gotmux.Pane{})
+				}
+
+				windowName := w.Name
+				if i == 0 {
+					windowName = sr.Label
+				}
+
+				windows = append(windows, gotmux.Window{
+					Id:             len(windows) + 1,
+					Name:           windowName,
+					Layout:         w.Layout,
+					Panes:          panes,
+					StartDirectory: sisterPath,
+				})
+
+				sisterWindowsMeta = append(sisterWindowsMeta, sisterWindowInfo{
+					paneConfigs: w.Panes,
+				})
+			}
+		} else {
+			windows = append(windows, gotmux.Window{
+				Id:             len(windows) + 1,
+				Name:           sr.Label,
+				Layout:         gotmux.LayoutEvenHorizontal,
+				Panes:          []gotmux.Pane{{}},
+				StartDirectory: sisterPath,
+			})
+
+			sisterWindowsMeta = append(sisterWindowsMeta, sisterWindowInfo{
+				paneConfigs: nil,
+			})
+		}
 	}
 
 	session := gotmux.NewSession(0, sessionName, path, windows)
@@ -327,6 +366,42 @@ func StartOrSwitchToSession(
 		}
 
 		p.RunCommand(panesConfig[i].Command)
+	}
+
+	// Run pane commands for sister windows
+	if len(sisterWindowsMeta) > 0 {
+		sessionWindows, err := session.ListWindows()
+		if err == nil {
+			mainWindowCount := len(sessionConfig.Windows)
+			for i, meta := range sisterWindowsMeta {
+				windowIndex := mainWindowCount + i
+				if windowIndex >= len(sessionWindows) {
+					continue
+				}
+
+				if len(meta.paneConfigs) == 0 {
+					continue
+				}
+
+				sw := sessionWindows[windowIndex]
+				sisterPanes, err := sw.ListPanes()
+				if err != nil {
+					continue
+				}
+
+				for j, p := range sisterPanes {
+					if len(meta.paneConfigs) <= j {
+						continue
+					}
+
+					if meta.paneConfigs[j].Size > 0 && meta.paneConfigs[j].Size < 100 {
+						paneSize(meta.paneConfigs[j].Size)
+					}
+
+					p.RunCommand(meta.paneConfigs[j].Command)
+				}
+			}
+		}
 	}
 
 	{

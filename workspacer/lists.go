@@ -23,15 +23,20 @@ var (
 	changesCleanStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // Green
 )
 
+// sisterGitInfo holds git information for a sister repository
+type sisterGitInfo struct {
+	label   string
+	branch  string
+	changes int
+}
+
 // repoGitInfo holds git information for a repository
 type repoGitInfo struct {
-	name          string
-	branch        string
-	changesCount  int
-	hasTenant     bool
-	tenantBranch  string
-	tenantChanges int
-	hasError      bool
+	name         string
+	branch       string
+	changesCount int
+	sisters      []sisterGitInfo
+	hasError     bool
 }
 
 // loadGitInfoForRepo loads git information for a single repository
@@ -51,12 +56,17 @@ func loadGitInfoForRepo(wc config.WorkspaceConfig, repoName string, gitInfoChan 
 	// Get uncommitted changes count
 	info.changesCount = util.GetUncommittedChangesCount(wc, repoName)
 
-	// Check for tenant repo
-	if wc.EnableTenantRepos && util.DoesTenantRepoExist(wc, repoName) {
-		info.hasTenant = true
-		tenantName := util.GetTenantRepoName(wc, repoName)
-		info.tenantBranch = util.GetGitBranch(wc, tenantName)
-		info.tenantChanges = util.GetUncommittedChangesCount(wc, tenantName)
+	// Check for sister repos
+	sisterRepos := util.GetSisterReposForProject(wc, repoName)
+	for _, sr := range sisterRepos {
+		if util.DoesProjectExist(wc, sr.Name) {
+			sisterInfo := sisterGitInfo{
+				label:   sr.Label,
+				branch:  util.GetGitBranch(wc, sr.Name),
+				changes: util.GetUncommittedChangesCount(wc, sr.Name),
+			}
+			info.sisters = append(info.sisters, sisterInfo)
+		}
 	}
 
 	gitInfoChan <- info
@@ -158,8 +168,8 @@ func ChoseProjectFromLocalWorkspace(workspace string, wc config.WorkspaceConfig,
 			if !e.IsDir() {
 				continue
 			}
-			// Skip tenant repos - they'll be shown as suffixes on service repos
-			if wc.EnableTenantRepos && !util.IsServiceRepo(wc, e.Name()) {
+			// Skip sister repos - they'll be shown as suffixes on their primary repos
+			if util.IsSisterRepo(wc, e.Name()) {
 				continue
 			}
 			if util.HasGitSubfolder(filepath.Join(path, e.Name())) {
@@ -176,13 +186,19 @@ func ChoseProjectFromLocalWorkspace(workspace string, wc config.WorkspaceConfig,
 				// Use cached data
 				for _, repoName := range gitRepos {
 					if projectCache, exists := cache.GetProjectCache(repoName); exists {
+						var sisters []sisterGitInfo
+						for label, sc := range projectCache.SisterRepos {
+							sisters = append(sisters, sisterGitInfo{
+								label:   label,
+								branch:  sc.Branch,
+								changes: sc.Changes,
+							})
+						}
 						info := repoGitInfo{
-							name:          repoName,
-							branch:        projectCache.GitBranch,
-							changesCount:  projectCache.GitChanges,
-							tenantBranch:  projectCache.TenantBranch,
-							tenantChanges: projectCache.TenantChanges,
-							hasTenant:     projectCache.TenantBranch != "",
+							name:         repoName,
+							branch:       projectCache.GitBranch,
+							changesCount: projectCache.GitChanges,
+							sisters:      sisters,
 						}
 						gitInfoMap[repoName] = info
 					}
@@ -245,8 +261,8 @@ func ChoseProjectFromLocalWorkspace(workspace string, wc config.WorkspaceConfig,
 				continue
 			}
 
-			// Skip tenant repos
-			if wc.EnableTenantRepos && !util.IsServiceRepo(wc, e.Name()) {
+			// Skip sister repos
+			if util.IsSisterRepo(wc, e.Name()) {
 				continue
 			}
 
@@ -270,14 +286,14 @@ func ChoseProjectFromLocalWorkspace(workspace string, wc config.WorkspaceConfig,
 					subtitle += "(error loading git info)"
 				}
 
-				// Add tenant info
-				if info.hasTenant {
-					item.Display = item.Display + " + tenant"
-					subtitle += " | Tenant: "
-					if info.tenantBranch != "" {
-						subtitle += branchStyle.Render(info.tenantBranch)
-						if info.tenantChanges > 0 {
-							subtitle += " " + changesStyle.Render(fmt.Sprintf("(%d)", info.tenantChanges))
+				// Add sister repo info
+				for _, sister := range info.sisters {
+					item.Display = item.Display + " +" + sister.label
+					subtitle += " | " + sister.label + ": "
+					if sister.branch != "" {
+						subtitle += branchStyle.Render(sister.branch)
+						if sister.changes > 0 {
+							subtitle += " " + changesStyle.Render(fmt.Sprintf("(%d)", sister.changes))
 						} else {
 							subtitle += " " + changesCleanStyle.Render("✓")
 						}

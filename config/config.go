@@ -24,10 +24,17 @@ func (o Orientation) IsValid() bool {
 	return false
 }
 
-type ProjectConfig struct {
+type SisterRepoConfig struct {
 	Name          string `yaml:"name"`
-	SubPath       string `yaml:"sub_path,omitempty"`
+	Label         string `yaml:"label"`
 	SessionPreset string `yaml:"session_preset,omitempty"`
+}
+
+type ProjectConfig struct {
+	Name          string            `yaml:"name"`
+	SubPath       string            `yaml:"sub_path,omitempty"`
+	SessionPreset string            `yaml:"session_preset,omitempty"`
+	SisterRepos   []SisterRepoConfig `yaml:"sister_repos,omitempty"`
 }
 
 type GithubBackend string
@@ -46,8 +53,6 @@ type WorkspaceConfig struct {
 	Projects            []ProjectConfig `yaml:"projects,omitempty"`
 	SessionPreset       string          `yaml:"session_preset,omitempty"`
 	Session             *SessionConfig  `yaml:"session_config,omitempty"`
-	EnableTenantRepos   bool            `yaml:"enable_tenant_repos,omitempty"`
-	TenantRepoPrefix    string          `yaml:"tenant_repo_prefix,omitempty"`
 	ActiveProjectsFirst bool            `yaml:"active_projects_first,omitempty"`
 	EnableGitInfo       bool            `yaml:"enable_git_info,omitempty"`
 	EnableRemoteRepos   bool            `yaml:"enable_remote_repos,omitempty"`
