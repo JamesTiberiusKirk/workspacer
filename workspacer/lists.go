@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/JamesTiberiusKirk/workspacer/config"
 	"github.com/JamesTiberiusKirk/workspacer/log"
@@ -83,7 +84,7 @@ func ChooseFromOpenWorkspaceProjectsAndSwitch(workspace string, workspaceConfig 
 		display := strings.TrimPrefix(p, workspace+"-")
 		lists = append(lists, list.Item{Display: display, Value: p})
 	}
-	item, found, err := list.NewList("Open projects in workspace: "+workspaceConfig.Name, lists)
+	item, found, err := list.NewList("Open projects in workspace: "+workspaceConfig.Name, lists, "", nil)
 	if err != nil {
 		panic(err)
 	}
@@ -125,6 +126,254 @@ func removeRepoFromArray(repos []string, name string) []string {
 	return res
 }
 
+func buildWorkspaceItems(workspace string, wc config.WorkspaceConfig, extraOptions []list.Item) ([]list.Item, string, bool) {
+	cache := LoadCache(wc)
+
+	openProjects := util.GetOpenProjectsByWorkspace(workspace)
+	path := util.GetWorkspacePath(wc)
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		log.Error("Failed to read workspace directory: %s", err.Error())
+		return []list.Item{}, "no cache", false
+	}
+
+	// Collect git repos that need info loading
+	var gitRepos []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if util.IsSisterRepo(wc, e.Name()) {
+			continue
+		}
+		if util.HasGitSubfolder(filepath.Join(path, e.Name())) {
+			gitRepos = append(gitRepos, e.Name())
+		}
+	}
+
+	// Load git info (from cache or fresh fetch)
+	gitInfoMap := make(map[string]repoGitInfo)
+	if wc.EnableGitInfo && len(gitRepos) > 0 {
+		useCache := wc.EnableCache
+		if useCache {
+			for _, repoName := range gitRepos {
+				if projectCache, exists := cache.GetProjectCache(repoName); exists {
+					var sisters []sisterGitInfo
+					for label, sc := range projectCache.SisterRepos {
+						sisters = append(sisters, sisterGitInfo{
+							label:   label,
+							branch:  sc.Branch,
+							changes: sc.Changes,
+						})
+					}
+					info := repoGitInfo{
+						name:         repoName,
+						branch:       projectCache.GitBranch,
+						changesCount: projectCache.GitChanges,
+						sisters:      sisters,
+					}
+					gitInfoMap[repoName] = info
+				}
+			}
+		}
+
+		if !useCache || len(gitInfoMap) < len(gitRepos) {
+			var wg sync.WaitGroup
+			gitInfoChan := make(chan repoGitInfo, len(gitRepos))
+
+			for _, repoName := range gitRepos {
+				if _, exists := gitInfoMap[repoName]; exists && useCache {
+					continue
+				}
+				wg.Add(1)
+				go loadGitInfoForRepo(wc, repoName, gitInfoChan, &wg)
+			}
+
+			go func() {
+				wg.Wait()
+				close(gitInfoChan)
+			}()
+
+			for info := range gitInfoChan {
+				gitInfoMap[info.name] = info
+				cache.UpdateGitInfo(info.name, info)
+			}
+		}
+	}
+
+	// Load remote repos
+	var remoteRepos []string
+	remoteError := false
+	if wc.EnableRemoteRepos {
+		cacheValid := wc.EnableCache && len(cache.GithubRepos) > 0 && cache.GithubReposShowArchived == wc.ShowArchivedRepos
+		if cacheValid {
+			remoteRepos = cache.GithubRepos
+		} else {
+			repos, err := GetRepoNames(wc)
+			if err != nil {
+				log.Error("Failed to fetch remote repos: %s", err.Error())
+				remoteError = true
+			} else {
+				remoteRepos = repos
+				cache.UpdateGithubRepos(repos, wc.ShowArchivedRepos)
+			}
+		}
+	}
+
+	// Build list items
+	folders := []list.Item{}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if util.IsSisterRepo(wc, e.Name()) {
+			continue
+		}
+
+		item := list.Item{
+			Display:  e.Name(),
+			Value:    "folder:" + e.Name(),
+			Subtitle: "Folder",
+		}
+
+		if info, hasGitInfo := gitInfoMap[e.Name()]; hasGitInfo {
+			subtitle := "Service: "
+			if info.branch != "" {
+				subtitle += branchStyle.Render(info.branch)
+				if info.changesCount > 0 {
+					subtitle += " " + changesStyle.Render(fmt.Sprintf("(%d)", info.changesCount))
+				} else {
+					subtitle += " " + changesCleanStyle.Render("✓")
+				}
+			} else if info.hasError {
+				subtitle += "(error loading git info)"
+			}
+
+			for _, sister := range info.sisters {
+				item.Display = item.Display + " +" + sister.label
+				subtitle += " | " + sister.label + ": "
+				if sister.branch != "" {
+					subtitle += branchStyle.Render(sister.branch)
+					if sister.changes > 0 {
+						subtitle += " " + changesStyle.Render(fmt.Sprintf("(%d)", sister.changes))
+					} else {
+						subtitle += " " + changesCleanStyle.Render("✓")
+					}
+				}
+			}
+
+			item.Subtitle = subtitle
+			remoteRepos = removeRepoFromArray(remoteRepos, e.Name())
+		}
+
+		if util.Contains(openProjects, e.Name()) {
+			item.Display = item.Display + " (Active)"
+			item.IsActive = true
+		}
+
+		folders = append(folders, item)
+	}
+
+	// Sort
+	if wc.ActiveProjectsFirst {
+		sort.Slice(folders, func(i, j int) bool {
+			iActive := folders[i].IsActive
+			jActive := folders[j].IsActive
+
+			if iActive != jActive {
+				return iActive
+			}
+
+			if wc.EnableUsageTracking && wc.EnableCache {
+				iProject := strings.TrimPrefix(folders[i].Value, "folder:")
+				jProject := strings.TrimPrefix(folders[j].Value, "folder:")
+
+				iCache, iExists := cache.GetProjectCache(iProject)
+				jCache, jExists := cache.GetProjectCache(jProject)
+
+				if iExists && jExists {
+					if iCache.AccessCountRecent != jCache.AccessCountRecent {
+						return iCache.AccessCountRecent > jCache.AccessCountRecent
+					}
+				}
+			}
+
+			return folders[i].Display < folders[j].Display
+		})
+	}
+
+	// Add remote repos section
+	if wc.EnableRemoteRepos && !remoteError && len(remoteRepos) == 0 {
+		folders = append(folders, list.Item{
+			Display:  "No remote repositories found",
+			Value:    "error:no-remote-repos",
+			Subtitle: "No repositories found on GitHub for this workspace",
+		})
+	}
+
+	for _, remoteRepo := range remoteRepos {
+		folders = append(folders, list.Item{
+			Display:  remoteRepo,
+			Value:    "git:" + remoteRepo,
+			Subtitle: "Clone From GitHub",
+		})
+	}
+
+	if remoteError {
+		folders = append(folders, list.Item{
+			Display:  "⚠ GitHub repos unavailable",
+			Value:    "error:github",
+			Subtitle: "Check network connection or GITHUB_AUTH token",
+		})
+	}
+
+	if len(extraOptions) > 0 {
+		folders = append(folders, extraOptions...)
+	}
+
+	// Format cache status
+	cacheStatus := "no cache"
+	projCount := len(cache.Projects)
+	gitCount := 0
+	for _, p := range cache.Projects {
+		if p.GitBranch != "" {
+			gitCount++
+		}
+	}
+	repoCount := len(cache.GithubRepos)
+
+	if !cache.LastUpdated.IsZero() {
+		ago := time.Since(cache.LastUpdated).Round(time.Minute)
+		parts := []string{}
+		if projCount > 0 {
+			parts = append(parts, fmt.Sprintf("%d proj", projCount))
+		}
+		if gitCount > 0 {
+			parts = append(parts, fmt.Sprintf("%d git", gitCount))
+		}
+		if repoCount > 0 {
+			parts = append(parts, fmt.Sprintf("%d gh", repoCount))
+		}
+		var ageStr string
+		if ago < time.Minute {
+			ageStr = "now"
+		} else if ago < time.Hour {
+			ageStr = fmt.Sprintf("%dm", int(ago.Minutes()))
+		} else {
+			ageStr = fmt.Sprintf("%dh", int(ago.Hours()))
+		}
+		parts = append(parts, ageStr)
+		cacheStatus = "cache: " + strings.Join(parts, " ")
+	}
+
+	// Save cache
+	if err := SaveCache(wc, cache); err != nil {
+		log.Error("Failed to save cache: %s", err.Error())
+	}
+
+	return folders, cacheStatus, remoteError
+}
+
 func ChoseProjectFromLocalWorkspace(workspace string, wc config.WorkspaceConfig, extraOptions []list.Item) (string, string) {
 	if _, err := os.Stat(util.GetWorkspacePath(wc)); os.IsNotExist(err) {
 		log.Error("workspace %s does not exist", workspace)
@@ -137,252 +386,20 @@ func ChoseProjectFromLocalWorkspace(workspace string, wc config.WorkspaceConfig,
 
 	// Load data in background
 	type loadResult struct {
-		folders      []list.Item
-		remoteError  bool
+		folders          []list.Item
+		cacheLastUpdated string
 	}
 	resultChan := make(chan loadResult, 1)
 
 	go func() {
 		defer func() {
-			// Quit the spinner when done loading
 			if p != nil {
 				p.Quit()
 			}
 		}()
 
-		// Load cache
-		cache := LoadCache(wc)
-
-		openProjects := util.GetOpenProjectsByWorkspace(workspace)
-		path := util.GetWorkspacePath(wc)
-		entries, err := os.ReadDir(path)
-		if err != nil {
-			log.Error("Failed to read workspace directory: %s", err.Error())
-			resultChan <- loadResult{folders: []list.Item{}}
-			return
-		}
-
-		// Collect git repos that need info loading
-		var gitRepos []string
-		for _, e := range entries {
-			if !e.IsDir() {
-				continue
-			}
-			// Skip sister repos - they'll be shown as suffixes on their primary repos
-			if util.IsSisterRepo(wc, e.Name()) {
-				continue
-			}
-			if util.HasGitSubfolder(filepath.Join(path, e.Name())) {
-				gitRepos = append(gitRepos, e.Name())
-			}
-		}
-
-		// Load git info (from cache or fresh fetch)
-		gitInfoMap := make(map[string]repoGitInfo)
-		if wc.EnableGitInfo && len(gitRepos) > 0 {
-			// Try loading from cache first
-			useCache := wc.EnableCache
-			if useCache {
-				// Use cached data
-				for _, repoName := range gitRepos {
-					if projectCache, exists := cache.GetProjectCache(repoName); exists {
-						var sisters []sisterGitInfo
-						for label, sc := range projectCache.SisterRepos {
-							sisters = append(sisters, sisterGitInfo{
-								label:   label,
-								branch:  sc.Branch,
-								changes: sc.Changes,
-							})
-						}
-						info := repoGitInfo{
-							name:         repoName,
-							branch:       projectCache.GitBranch,
-							changesCount: projectCache.GitChanges,
-							sisters:      sisters,
-						}
-						gitInfoMap[repoName] = info
-					}
-				}
-			}
-
-			// Fetch fresh data if cache disabled or missing
-			if !useCache || len(gitInfoMap) < len(gitRepos) {
-				var wg sync.WaitGroup
-				gitInfoChan := make(chan repoGitInfo, len(gitRepos))
-
-				for _, repoName := range gitRepos {
-					// Skip if already in cache
-					if _, exists := gitInfoMap[repoName]; exists && useCache {
-						continue
-					}
-					wg.Add(1)
-					go loadGitInfoForRepo(wc, repoName, gitInfoChan, &wg)
-				}
-
-				// Close channel when all goroutines complete
-				go func() {
-					wg.Wait()
-					close(gitInfoChan)
-				}()
-
-				// Collect results and update cache
-				for info := range gitInfoChan {
-					gitInfoMap[info.name] = info
-					cache.UpdateGitInfo(info.name, info)
-				}
-			}
-		}
-
-		// Load remote repos (from cache or fresh fetch)
-		var remoteRepos []string
-		remoteError := false
-		if wc.EnableRemoteRepos {
-			// Try cache first, but invalidate if show_archived_repos setting changed
-			cacheValid := wc.EnableCache && len(cache.GithubRepos) > 0 && cache.GithubReposShowArchived == wc.ShowArchivedRepos
-			if cacheValid {
-				remoteRepos = cache.GithubRepos
-			} else {
-				// Fetch fresh data
-				repos, err := GetRepoNames(wc)
-				if err != nil {
-					log.Error("Failed to fetch remote repos: %s", err.Error())
-					remoteError = true
-				} else {
-					remoteRepos = repos
-					cache.UpdateGithubRepos(repos, wc.ShowArchivedRepos)
-				}
-			}
-		}
-
-		// Build list items
-		folders := []list.Item{}
-		for _, e := range entries {
-			if !e.IsDir() {
-				continue
-			}
-
-			// Skip sister repos
-			if util.IsSisterRepo(wc, e.Name()) {
-				continue
-			}
-
-			item := list.Item{
-				Display: e.Name(),
-				Value:   "folder:" + e.Name(),
-				Subtitle: "Folder",
-			}
-
-			// Add git info if available
-			if info, hasGitInfo := gitInfoMap[e.Name()]; hasGitInfo {
-				subtitle := "Service: "
-				if info.branch != "" {
-					subtitle += branchStyle.Render(info.branch)
-					if info.changesCount > 0 {
-						subtitle += " " + changesStyle.Render(fmt.Sprintf("(%d)", info.changesCount))
-					} else {
-						subtitle += " " + changesCleanStyle.Render("✓")
-					}
-				} else if info.hasError {
-					subtitle += "(error loading git info)"
-				}
-
-				// Add sister repo info
-				for _, sister := range info.sisters {
-					item.Display = item.Display + " +" + sister.label
-					subtitle += " | " + sister.label + ": "
-					if sister.branch != "" {
-						subtitle += branchStyle.Render(sister.branch)
-						if sister.changes > 0 {
-							subtitle += " " + changesStyle.Render(fmt.Sprintf("(%d)", sister.changes))
-						} else {
-							subtitle += " " + changesCleanStyle.Render("✓")
-						}
-					}
-				}
-
-				item.Subtitle = subtitle
-				remoteRepos = removeRepoFromArray(remoteRepos, e.Name())
-			}
-
-			// Mark active projects
-			if util.Contains(openProjects, e.Name()) {
-				item.Display = item.Display + " (Active)"
-				item.IsActive = true
-			}
-
-			folders = append(folders, item)
-		}
-
-		// Sort: Active first, then by recent usage, then alphabetical
-		if wc.ActiveProjectsFirst {
-			sort.Slice(folders, func(i, j int) bool {
-				iActive := folders[i].IsActive
-				jActive := folders[j].IsActive
-
-				// Active projects first
-				if iActive != jActive {
-					return iActive
-				}
-
-				// Then by recent usage if tracking enabled
-				if wc.EnableUsageTracking && wc.EnableCache {
-					// Extract project name from value (e.g., "folder:workspacer" -> "workspacer")
-					iProject := strings.TrimPrefix(folders[i].Value, "folder:")
-					jProject := strings.TrimPrefix(folders[j].Value, "folder:")
-
-					iCache, iExists := cache.GetProjectCache(iProject)
-					jCache, jExists := cache.GetProjectCache(jProject)
-
-					if iExists && jExists {
-						// Sort by recent usage count (higher first)
-						if iCache.AccessCountRecent != jCache.AccessCountRecent {
-							return iCache.AccessCountRecent > jCache.AccessCountRecent
-						}
-					}
-				}
-
-				// Finally alphabetical
-				return folders[i].Display < folders[j].Display
-			})
-		}
-
-		// Add empty remote repos indicator
-		if wc.EnableRemoteRepos && !remoteError && len(remoteRepos) == 0 {
-			folders = append(folders, list.Item{
-				Display:  "No remote repositories found",
-				Value:    "error:no-remote-repos",
-				Subtitle: "No repositories found on GitHub for this workspace",
-			})
-		}
-
-		// Add remote repos
-		for _, remoteRepo := range remoteRepos {
-			folders = append(folders, list.Item{
-				Display:  remoteRepo,
-				Value:    "git:" + remoteRepo,
-				Subtitle: "Clone From GitHub",
-			})
-		}
-
-		// Add error indicator if GitHub fetch failed
-		if remoteError {
-			folders = append(folders, list.Item{
-				Display:  "⚠ GitHub repos unavailable",
-				Value:    "error:github",
-				Subtitle: "Check network connection or GITHUB_AUTH token",
-			})
-		}
-
-		if len(extraOptions) > 0 {
-			folders = append(folders, extraOptions...)
-		}
-
-		// Save cache
-		if err := SaveCache(wc, cache); err != nil {
-			log.Error("Failed to save cache: %s", err.Error())
-		}
-
-		resultChan <- loadResult{folders: folders, remoteError: remoteError}
+		folders, cacheStatus, _ := buildWorkspaceItems(workspace, wc, extraOptions)
+		resultChan <- loadResult{folders: folders, cacheLastUpdated: cacheStatus}
 	}()
 
 	// Run spinner while loading
@@ -393,8 +410,15 @@ func ChoseProjectFromLocalWorkspace(workspace string, wc config.WorkspaceConfig,
 	// Get loaded data
 	result := <-resultChan
 
+	// Refresh callback: clear cache and reload
+	refreshCache := func() ([]list.Item, string) {
+		_ = ClearCache(wc)
+		folders, cacheStatus, _ := buildWorkspaceItems(workspace, wc, extraOptions)
+		return folders, cacheStatus
+	}
+
 	// Show list
-	item, found, err := list.NewList("Select a project", result.folders)
+	item, found, err := list.NewList("Select a project", result.folders, result.cacheLastUpdated, refreshCache)
 	if err != nil {
 		panic(err)
 	}
@@ -414,6 +438,9 @@ func ChoseProjectFromLocalWorkspace(workspace string, wc config.WorkspaceConfig,
 	} else if strings.HasPrefix(item.Value, "git:") {
 		projectType = "git"
 		projectName = strings.TrimPrefix(item.Value, "git:")
+	} else if strings.HasPrefix(item.Value, "root:") {
+		projectType = "root"
+		projectName = ""
 	} else {
 		return "", ""
 	}

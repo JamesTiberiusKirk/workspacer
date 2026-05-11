@@ -3,6 +3,7 @@ package workspacer
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -183,7 +184,14 @@ func StartOrSwitchToSession(
 		}
 	}
 
-	if !util.DoesProjectExist(wc, project) {
+	rootMode := project == ""
+	if rootMode {
+		project = "root"
+		if _, err := os.Stat(util.GetWorkspacePath(wc)); os.IsNotExist(err) {
+			fmt.Printf("\n\nWorkspace root does not exist\n\n")
+			return
+		}
+	} else if !util.DoesProjectExist(wc, project) {
 		fmt.Printf("\n\nProject %s does not exist\n\n", project)
 		return
 	}
@@ -223,7 +231,10 @@ func StartOrSwitchToSession(
 		}
 	}
 
-	path := filepath.Join(util.GetWorkspacePath(wc), project)
+	path := util.GetWorkspacePath(wc)
+	if !rootMode {
+		path = filepath.Join(path, project)
+	}
 
 	// TODO: check if the path is valid
 	// This is where the project will be cloned if config has been setup

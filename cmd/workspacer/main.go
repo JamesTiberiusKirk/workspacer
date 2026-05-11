@@ -30,6 +30,7 @@ var ConfigMap cli.ConfigMapType = cli.ConfigMapType{
 					return
 				}
 				// args = append([]string{choise}, args...)
+			case "root":
 			case "nochoise":
 				return
 

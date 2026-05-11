@@ -1061,36 +1061,29 @@ func (m Model) FullHelp() [][]key.Binding {
 
 // View renders the component.
 func (m Model) View() string {
-	var (
-		sections    []string
-		availHeight = m.height
-	)
+	var sections []string
 
 	if m.showTitle || (m.showFilter && m.filteringEnabled) {
 		v := m.titleView()
 		sections = append(sections, v)
-		availHeight -= lipgloss.Height(v)
 	}
 
 	if m.showStatusBar {
 		v := m.statusView()
 		sections = append(sections, v)
-		availHeight -= lipgloss.Height(v)
 	}
 
 	var pagination string
 	if m.showPagination {
 		pagination = m.paginationView()
-		availHeight -= lipgloss.Height(pagination)
 	}
 
 	var help string
 	if m.showHelp {
 		help = m.helpView()
-		availHeight -= lipgloss.Height(help)
 	}
 
-	content := lipgloss.NewStyle().Height(availHeight).Render(m.populatedView())
+	content := m.populatedView()
 	sections = append(sections, content)
 
 	if m.showPagination {
@@ -1244,18 +1237,6 @@ func (m Model) populatedView() string {
 				fmt.Fprint(&b, strings.Repeat("\n", m.delegate.Spacing()+1))
 			}
 		}
-	}
-
-	// If there aren't enough items to fill up this page (always the last page)
-	// then we need to add some newlines to fill up the space where items would
-	// have been.
-	itemsOnPage := m.Paginator.ItemsOnPage(len(items))
-	if itemsOnPage < m.Paginator.PerPage {
-		n := (m.Paginator.PerPage - itemsOnPage) * (m.delegate.Height() + m.delegate.Spacing())
-		if len(items) == 0 {
-			n -= m.delegate.Height() - 1
-		}
-		fmt.Fprint(&b, strings.Repeat("\n", n))
 	}
 
 	return b.String()
