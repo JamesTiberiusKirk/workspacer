@@ -179,6 +179,30 @@ var ConfigMap cli.ConfigMapType = cli.ConfigMapType{
 		}),
 	},
 
+	"tmp": &cli.Command{
+		Description: "Spin up a temporary session rooted at the given path. Usage: tmp <path>",
+		Runner: func(ctx cli.ConfigMapCtx) {
+			if len(ctx.Args) < 2 {
+				fmt.Println("Need to provide a path")
+				return
+			}
+
+			path, err := util.ExpandTilde(ctx.Args[1])
+			if err != nil {
+				fmt.Printf("Error expanding path: %s\n", err.Error())
+				return
+			}
+
+			preset := config.SessionConfig{
+				Windows: []config.WindowConfig{{
+					Panes: []config.PanesConfig{{}},
+				}},
+			}
+
+			workspacer.StartOrSwitchToTmuxPreset(path, path, preset)
+		},
+	},
+
 	"n,new": &cli.Command{
 		Description: "New project in the workspace project folder.",
 		Runner:      cli.MiddlewareCommon(commands.RunNewCommand),
