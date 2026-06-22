@@ -18,6 +18,34 @@ func sanitizeTmuxName(name string) string {
 	return strings.ReplaceAll(name, ".", "_")
 }
 
+// StartOrSwitchToTmpSession creates (or attaches/switches to) a tmux session
+// named after the given path and rooted in it. No workspace or preset needed.
+func StartOrSwitchToTmpSession(path string) {
+	name := sanitizeTmuxName(filepath.Base(path))
+
+	exists := exec.Command("tmux", "has-session", "-t="+name).Run() == nil
+	if !exists {
+		if err := exec.Command("tmux", "new-session", "-d", "-s", name, "-c", path).Run(); err != nil {
+			fmt.Printf("Error creating session: %s\n", err.Error())
+			return
+		}
+	}
+
+	var attach *exec.Cmd
+	if os.Getenv("TMUX") != "" {
+		attach = exec.Command("tmux", "switch-client", "-t="+name)
+	} else {
+		attach = exec.Command("tmux", "attach-session", "-t="+name)
+	}
+
+	attach.Stdin = os.Stdin
+	attach.Stdout = os.Stdout
+	attach.Stderr = os.Stderr
+	if err := attach.Run(); err != nil {
+		fmt.Printf("Error attaching to session: %s\n", err.Error())
+	}
+}
+
 func CloseAllSessionsInWorkspace(wc config.WorkspaceConfig) {
 	server := new(gotmux.Server)
 	sessions, err := server.ListSessions()

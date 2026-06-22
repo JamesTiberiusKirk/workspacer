@@ -193,13 +193,7 @@ var ConfigMap cli.ConfigMapType = cli.ConfigMapType{
 				return
 			}
 
-			preset := config.SessionConfig{
-				Windows: []config.WindowConfig{{
-					Panes: []config.PanesConfig{{}},
-				}},
-			}
-
-			workspacer.StartOrSwitchToTmuxPreset(path, path, preset)
+			workspacer.StartOrSwitchToTmpSession(path)
 		},
 	},
 
