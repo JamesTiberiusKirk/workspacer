@@ -1,103 +1,85 @@
 package workspacer
 
 import (
-	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/JamesTiberiusKirk/workspacer/config"
 	"github.com/JamesTiberiusKirk/workspacer/util"
-	gotmux "github.com/jubnzv/go-tmux"
 )
 
-// sanitizeTmuxName replaces characters that tmux does not allow in session names.
+// sanitizeTmuxName replaces characters multiplexers disallow in session names.
 func sanitizeTmuxName(name string) string {
 	return strings.ReplaceAll(name, ".", "_")
 }
 
-// StartOrSwitchToTmpSession creates (or attaches/switches to) a tmux session
-// named after the given path and rooted in it. No workspace or preset needed.
+// applyVimArgs appends the project's file/extra-command options to a vim-family
+// pane command (from the `project:file:extra` target syntax).
+func applyVimArgs(cmd, fileOption, extraVimCommands string) string {
+	switch cmd {
+	case "vi", "vim", "nvim":
+		if fileOption != "" {
+			cmd += " ./" + fileOption
+		}
+		if extraVimCommands != "" {
+			cmd += " " + extraVimCommands
+		}
+	}
+	return cmd
+}
+
+// StartOrSwitchToTmpSession creates (or attaches/switches to) a session named
+// after the given path and rooted in it. No workspace or preset — always tmux
+// (there's no workspace config to select a backend from).
 func StartOrSwitchToTmpSession(path string) {
 	name := sanitizeTmuxName(filepath.Base(path))
+	be := GetBackend()
 
-	exists := exec.Command("tmux", "has-session", "-t="+name).Run() == nil
-	if !exists {
-		if err := exec.Command("tmux", "new-session", "-d", "-s", name, "-c", path).Run(); err != nil {
+	if !be.HasSession(name) {
+		spec := SessionSpec{Name: name, Path: path, Windows: []WindowSpec{{Panes: []PaneSpec{{}}}}}
+		if err := be.CreateSession(spec); err != nil {
 			fmt.Printf("Error creating session: %s\n", err.Error())
 			return
 		}
 	}
-
-	var attach *exec.Cmd
-	if os.Getenv("TMUX") != "" {
-		attach = exec.Command("tmux", "switch-client", "-t="+name)
-	} else {
-		attach = exec.Command("tmux", "attach-session", "-t="+name)
-	}
-
-	attach.Stdin = os.Stdin
-	attach.Stdout = os.Stdout
-	attach.Stderr = os.Stderr
-	if err := attach.Run(); err != nil {
+	if err := be.Attach(name); err != nil {
 		fmt.Printf("Error attaching to session: %s\n", err.Error())
 	}
 }
 
 func CloseAllSessionsInWorkspace(wc config.WorkspaceConfig) {
-	server := new(gotmux.Server)
-	sessions, err := server.ListSessions()
-	if err != nil {
-		// handle error
-		fmt.Println("error ", err.Error())
+	if wc.Prefix == "" {
+		fmt.Println("prefix is empty")
+		return
 	}
-
-	for _, s := range sessions {
-		if wc.Prefix == "" {
-			fmt.Println("prefix is empty")
-			return
-		}
-
-		if strings.HasPrefix(s.Name, wc.Prefix) {
-			err := server.KillSession(s.Name)
-			if err != nil {
-				// handle error
+	be := GetBackend()
+	names, err := be.ListSessions()
+	if err != nil {
+		fmt.Println("error ", err.Error())
+		return
+	}
+	for _, n := range names {
+		if strings.HasPrefix(n, wc.Prefix) {
+			if err := be.KillSession(n); err != nil {
 				fmt.Println("error ", err.Error())
 			}
 		}
 	}
 }
 
+// StartOrSwitchToTmuxPreset builds (or attaches to) a session from a standalone
+// preset rooted at basePath. No workspace config → always tmux.
 func StartOrSwitchToTmuxPreset(name string, basePath string, preset config.SessionConfig) {
 	name = sanitizeTmuxName(name)
-	server := new(gotmux.Server)
-	sessions, _ := server.ListSessions()
-	if len(sessions) > 0 {
-		// Check that the "example" session already exists.
-		exists, err := server.HasSession(name)
-		if err != nil {
-			fmt.Println(fmt.Errorf("Can't check '%s' session: %s", name, err))
-			return
-		}
+	be := GetBackend()
 
-		if exists {
-			sessions, err := server.ListSessions()
-			if err != nil {
-				// handle error
-				fmt.Println("error ", err.Error())
-			}
-
-			for _, s := range sessions {
-				if s.Name != name {
-					continue
-				}
-				s.AttachSession()
-				break
-			}
-			return
+	if be.HasSession(name) {
+		if err := be.Attach(name); err != nil {
+			fmt.Println("error ", err.Error())
 		}
+		return
 	}
 
 	basePath, err := util.ExpandTilde(basePath)
@@ -106,92 +88,30 @@ func StartOrSwitchToTmuxPreset(name string, basePath string, preset config.Sessi
 		return
 	}
 
-	windows := []gotmux.Window{}
-	for i, w := range preset.Windows {
-		panes := []gotmux.Pane{}
-		for range w.Panes {
-			pane := gotmux.Pane{}
-			panes = append(panes, pane)
-		}
-
-		if w.Path == "" {
-			w.Path = basePath
+	spec := SessionSpec{Name: name, Path: basePath}
+	for _, w := range preset.Windows {
+		wp := w.Path
+		if wp == "" {
+			wp = basePath
+		} else if expanded, err := util.ExpandTilde(wp); err == nil {
+			wp = expanded
 		} else {
-			expanded, err := util.ExpandTilde(w.Path)
-			if err != nil {
-				fmt.Printf("Error expanding path %s: %s\n", w.Path, err)
-				return
-			}
-			w.Path = expanded
+			fmt.Printf("Error expanding path %s: %s\n", w.Path, err)
+			return
 		}
-
-		window := gotmux.Window{
-			Id:             i + 1,
-			Name:           w.Name,
-			Layout:         w.Layout,
-			Panes:          panes,
-			StartDirectory: w.Path,
+		ws := WindowSpec{Name: w.Name, Layout: w.Layout, Path: wp}
+		for _, p := range w.Panes {
+			ws.Panes = append(ws.Panes, PaneSpec{Command: p.Command, Size: p.Size})
 		}
-
-		windows = append(windows, window)
+		spec.Windows = append(spec.Windows, ws)
 	}
 
-	session := gotmux.NewSession(0, name, basePath, windows)
-
-	server.AddSession(*session)
-	conf := gotmux.Configuration{
-		Server:        server,
-		Sessions:      []*gotmux.Session{session},
-		ActiveSession: nil,
-	}
-
-	// Setup this configuration.
-	err = conf.Apply()
-	if err != nil {
-		msg := fmt.Errorf("Can't apply prepared configuration: %s", err)
-		fmt.Println(msg)
+	if err := be.CreateSession(spec); err != nil {
+		fmt.Println(err)
 		return
 	}
-
-	panes, err := session.ListPanes()
-	if err != nil {
+	if err := be.Attach(name); err != nil {
 		fmt.Println("error ", err.Error())
-	}
-
-	panesConfig := preset.ListPanes()
-	for i, p := range panes {
-		if len(panesConfig) <= i {
-			continue
-		}
-
-		if panesConfig[i].Command == "vi" ||
-			panesConfig[i].Command == "vim" ||
-			panesConfig[i].Command == "nvim" {
-		}
-
-		if panesConfig[i].Size > 0 && panesConfig[i].Size < 100 {
-			paneSize(panesConfig[i].Size)
-		}
-
-		p.RunCommand(panesConfig[i].Command)
-	}
-
-	{
-		// NOTE: Select first window
-		windows, err := session.ListWindows()
-		if err != nil {
-			fmt.Println("error ", err.Error())
-		}
-		windows[0].Select()
-		panes[0].Select()
-	}
-
-	// Attach to the created session
-	err = session.AttachSession()
-	if err != nil {
-		msg := fmt.Errorf("Can't attached to created session: %s", err)
-		fmt.Println(msg)
-		return
 	}
 }
 
@@ -200,7 +120,6 @@ func StartOrSwitchToSession(
 	presets map[string]config.SessionConfig,
 	project string,
 ) {
-
 	fileOption := ""
 	extraVimCommands := ""
 	if strings.Contains(project, ":") {
@@ -225,47 +144,22 @@ func StartOrSwitchToSession(
 	}
 
 	sessionName := sanitizeTmuxName(project)
-
 	if wc.Prefix != "" {
 		sessionName = sanitizeTmuxName(wc.Prefix) + "-" + sessionName
 	}
 
-	server := new(gotmux.Server)
-
-	sessions, _ := server.ListSessions()
-	if len(sessions) > 0 {
-		// Check that the "example" session already exists.
-		exists, err := server.HasSession(sessionName)
-		if err != nil {
-			fmt.Println(fmt.Errorf("Can't check '%s' session: %s", sessionName, err))
-			return
+	be := GetBackend()
+	if be.HasSession(sessionName) {
+		if err := be.Attach(sessionName); err != nil {
+			fmt.Println("error ", err.Error())
 		}
-
-		if exists {
-			sessions, err := server.ListSessions()
-			if err != nil {
-				// handle error
-				fmt.Println("error ", err.Error())
-			}
-
-			for _, s := range sessions {
-				if s.Name != sessionName {
-					continue
-				}
-				s.AttachSession()
-				break
-			}
-			return
-		}
+		return
 	}
 
 	path := util.GetWorkspacePath(wc)
 	if !rootMode {
 		path = filepath.Join(path, project)
 	}
-
-	// TODO: check if the path is valid
-	// This is where the project will be cloned if config has been setup
 
 	var sessionConfig config.SessionConfig
 	if wc.SessionPreset != "" {
@@ -274,228 +168,65 @@ func StartOrSwitchToSession(
 		sessionConfig = *wc.Session
 	}
 
-	windows := []gotmux.Window{}
+	spec := SessionSpec{Name: sessionName, Path: path}
 
+	// Main windows (first window's name is overridden with the project name).
 	for i, w := range sessionConfig.Windows {
-		panes := []gotmux.Pane{}
-		for range w.Panes {
-			pane := gotmux.Pane{}
-			panes = append(panes, pane)
-		}
-
-		windowName := w.Name
-		// Override first window name with project name
+		wname := w.Name
 		if i == 0 {
-			windowName = project
+			wname = project
 		}
-
-		window := gotmux.Window{
-			Id:     i + 1,
-			Name:   windowName,
-			Layout: w.Layout,
-			Panes:  panes,
+		ws := WindowSpec{Name: wname, Layout: w.Layout}
+		for _, p := range w.Panes {
+			ws.Panes = append(ws.Panes, PaneSpec{
+				Command: applyVimArgs(p.Command, fileOption, extraVimCommands),
+				Size:    p.Size,
+			})
 		}
-
-		windows = append(windows, window)
+		spec.Windows = append(spec.Windows, ws)
 	}
 
-	// Add windows for sister repos
-	type sisterWindowInfo struct {
-		paneConfigs []config.PanesConfig
-	}
-	var sisterWindowsMeta []sisterWindowInfo
-
-	sisterRepos := util.GetSisterReposForProject(wc, project)
-	for _, sr := range sisterRepos {
+	// Sister repos add windows rooted in their own paths.
+	for _, sr := range util.GetSisterReposForProject(wc, project) {
 		if !util.DoesProjectExist(wc, sr.Name) {
 			continue
 		}
-
 		sisterPath := filepath.Join(util.GetWorkspacePath(wc), sr.Name)
 
-		var sisterSessionConfig config.SessionConfig
+		var sisterCfg config.SessionConfig
 		if sr.SessionPreset != "" {
-			if preset, ok := presets[sr.SessionPreset]; ok {
-				sisterSessionConfig = preset
+			if p, ok := presets[sr.SessionPreset]; ok {
+				sisterCfg = p
 			}
 		}
 
-		if len(sisterSessionConfig.Windows) > 0 {
-			for i, w := range sisterSessionConfig.Windows {
-				var panes []gotmux.Pane
-				for range w.Panes {
-					panes = append(panes, gotmux.Pane{})
-				}
-
-				windowName := w.Name
+		if len(sisterCfg.Windows) > 0 {
+			for i, w := range sisterCfg.Windows {
+				wname := w.Name
 				if i == 0 {
-					windowName = sr.Label
+					wname = sr.Label
 				}
-
-				windows = append(windows, gotmux.Window{
-					Id:             len(windows) + 1,
-					Name:           windowName,
-					Layout:         w.Layout,
-					Panes:          panes,
-					StartDirectory: sisterPath,
-				})
-
-				sisterWindowsMeta = append(sisterWindowsMeta, sisterWindowInfo{
-					paneConfigs: w.Panes,
-				})
+				ws := WindowSpec{Name: wname, Layout: w.Layout, Path: sisterPath}
+				for _, p := range w.Panes {
+					ws.Panes = append(ws.Panes, PaneSpec{Command: p.Command, Size: p.Size})
+				}
+				spec.Windows = append(spec.Windows, ws)
 			}
 		} else {
-			windows = append(windows, gotmux.Window{
-				Id:             len(windows) + 1,
-				Name:           sr.Label,
-				Layout:         gotmux.LayoutEvenHorizontal,
-				Panes:          []gotmux.Pane{{}},
-				StartDirectory: sisterPath,
-			})
-
-			sisterWindowsMeta = append(sisterWindowsMeta, sisterWindowInfo{
-				paneConfigs: nil,
+			spec.Windows = append(spec.Windows, WindowSpec{
+				Name:   sr.Label,
+				Layout: "even-horizontal",
+				Path:   sisterPath,
+				Panes:  []PaneSpec{{}},
 			})
 		}
 	}
 
-	session := gotmux.NewSession(0, sessionName, path, windows)
-
-	server.AddSession(*session)
-	conf := gotmux.Configuration{
-		Server:        server,
-		Sessions:      []*gotmux.Session{session},
-		ActiveSession: nil,
-	}
-
-	// Setup this configuration.
-	err := conf.Apply()
-	if err != nil {
-		msg := fmt.Errorf("Can't apply prepared configuration: %s", err)
-		fmt.Println(msg)
+	if err := be.CreateSession(spec); err != nil {
+		fmt.Println(err)
 		return
 	}
-
-	panes, err := session.ListPanes()
-	if err != nil {
+	if err := be.Attach(sessionName); err != nil {
 		fmt.Println("error ", err.Error())
 	}
-
-	panesConfig := sessionConfig.ListPanes()
-	for i, p := range panes {
-		// fmt.Println(p.ID)
-
-		if len(panesConfig) <= i {
-			continue
-		}
-
-		if panesConfig[i].Command == "vi" ||
-			panesConfig[i].Command == "vim" ||
-			panesConfig[i].Command == "nvim" {
-			if fileOption != "" {
-				panesConfig[i].Command += " ./" + fileOption
-			}
-			if extraVimCommands != "" {
-				panesConfig[i].Command += " " + extraVimCommands
-			}
-		}
-
-		if panesConfig[i].Size > 0 && panesConfig[i].Size < 100 {
-			paneSize(panesConfig[i].Size)
-		}
-
-		p.RunCommand(panesConfig[i].Command)
-	}
-
-	// Run pane commands for sister windows
-	if len(sisterWindowsMeta) > 0 {
-		sessionWindows, err := session.ListWindows()
-		if err == nil {
-			mainWindowCount := len(sessionConfig.Windows)
-			for i, meta := range sisterWindowsMeta {
-				windowIndex := mainWindowCount + i
-				if windowIndex >= len(sessionWindows) {
-					continue
-				}
-
-				if len(meta.paneConfigs) == 0 {
-					continue
-				}
-
-				sw := sessionWindows[windowIndex]
-				sisterPanes, err := sw.ListPanes()
-				if err != nil {
-					continue
-				}
-
-				for j, p := range sisterPanes {
-					if len(meta.paneConfigs) <= j {
-						continue
-					}
-
-					if meta.paneConfigs[j].Size > 0 && meta.paneConfigs[j].Size < 100 {
-						paneSize(meta.paneConfigs[j].Size)
-					}
-
-					p.RunCommand(meta.paneConfigs[j].Command)
-				}
-			}
-		}
-	}
-
-	{
-		// NOTE: Select first window
-		windows, err := session.ListWindows()
-		if err != nil {
-			fmt.Println("error ", err.Error())
-		}
-		windows[0].Select()
-		panes[0].Select()
-	}
-
-	// Attach to the created session
-	err = session.AttachSession()
-	if err != nil {
-		msg := fmt.Errorf("Can't attached to created session: %s", err)
-		fmt.Println(msg)
-		return
-	}
-}
-
-func paneSize(size int) error {
-	args := []string{
-		"resizep",
-		// "-t", fmt.Sprintf("%s:%s", w.SessionName, w.Name),
-		"-t{right}",
-		"-x " + fmt.Sprint(size) + "%"}
-	s, err_cmd, err_exec := RunCmd(args)
-	if err_exec != nil {
-		//HANDLE
-		fmt.Print(err_exec.Error())
-	}
-	if err_cmd != "" {
-		//HANDLE
-		fmt.Print(err_cmd)
-	}
-	fmt.Print(s)
-
-	return nil
-}
-
-func RunCmd(args []string) (string, string, error) {
-	tmux, err := exec.LookPath("tmux")
-	if err != nil {
-		return "", "", err
-	}
-	fmt.Print(tmux, fmt.Sprint(args))
-	cmd := exec.Command(tmux, args...)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err = cmd.Run()
-	outStr, errStr := string(stdout.Bytes()), string(stderr.Bytes())
-
-	return outStr, errStr, err
 }

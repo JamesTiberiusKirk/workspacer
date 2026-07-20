@@ -44,6 +44,15 @@ const (
 	GithubBackendCLI GithubBackend = "cli"
 )
 
+// MuxBackend selects the terminal multiplexer workspacer drives. Chosen at
+// runtime via the WORKSPACER_MUX env var (see workspacer.GetBackend).
+type MuxBackend string
+
+const (
+	MuxTmux  MuxBackend = "tmux"  // default
+	MuxGtmux MuxBackend = "gtmux" // github.com/FyrmForge/gtmux
+)
+
 type WorkspaceConfig struct {
 	Name                string          `yaml:"name"`
 	Prefix              string          `yaml:"prefix"`

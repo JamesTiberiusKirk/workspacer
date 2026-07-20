@@ -10,7 +10,7 @@ import (
 	"github.com/JamesTiberiusKirk/workspacer/log"
 	"github.com/JamesTiberiusKirk/workspacer/state"
 	"github.com/JamesTiberiusKirk/workspacer/util"
-	"github.com/jubnzv/go-tmux"
+	"github.com/JamesTiberiusKirk/workspacer/workspacer"
 )
 
 func MiddlewareCommon(r Runner) Runner {
@@ -44,14 +44,9 @@ func MiddlewareAssertWorkspace(r Runner) Runner {
 		}
 
 		if workspace == "current" {
-			name, err := tmux.GetAttachedSessionName()
-			if err != nil {
-				log.Error("could not get current tmux session")
-				return
-			}
-
-			if name == "" {
-				log.Error("no tmux session attached")
+			name, ok := workspacer.CurrentSessionName()
+			if !ok {
+				log.Error("no multiplexer session attached")
 				return
 			}
 
