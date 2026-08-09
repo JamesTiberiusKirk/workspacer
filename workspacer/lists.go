@@ -74,7 +74,7 @@ func loadGitInfoForRepo(wc config.WorkspaceConfig, repoName string, gitInfoChan 
 }
 
 func ChooseFromOpenWorkspaceProjectsAndSwitch(workspace string, workspaceConfig config.WorkspaceConfig, sessionPresets map[string]config.SessionConfig) {
-	openProjects := util.GetOpenProjectsByWorkspace(workspace)
+	openProjects := GetOpenProjectsByWorkspace(workspace)
 	if len(openProjects) == 0 {
 		log.Info("No open projects in workspace %s", workspace)
 	}
@@ -129,7 +129,7 @@ func removeRepoFromArray(repos []string, name string) []string {
 func buildWorkspaceItems(workspace string, wc config.WorkspaceConfig, extraOptions []list.Item) ([]list.Item, string, bool) {
 	cache := LoadCache(wc)
 
-	openProjects := util.GetOpenProjectsByWorkspace(workspace)
+	openProjects := GetOpenProjectsByWorkspace(workspace)
 	path := util.GetWorkspacePath(wc)
 	entries, err := os.ReadDir(path)
 	if err != nil {

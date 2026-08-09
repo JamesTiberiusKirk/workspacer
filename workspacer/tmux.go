@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/JamesTiberiusKirk/workspacer/config"
+	"github.com/JamesTiberiusKirk/workspacer/log"
 	"github.com/JamesTiberiusKirk/workspacer/util"
 )
 
@@ -47,6 +48,26 @@ func StartOrSwitchToTmpSession(path string) {
 	if err := be.Attach(name); err != nil {
 		fmt.Printf("Error attaching to session: %s\n", err.Error())
 	}
+}
+
+// GetOpenProjectsByWorkspace lists project names with an open session in the
+// configured backend (session name = prefix, or prefix-project).
+func GetOpenProjectsByWorkspace(wsPrefix string) []string {
+	names, err := GetBackend().ListSessions()
+	if err != nil {
+		log.Error("could not get sessions: %s", err.Error())
+		return []string{}
+	}
+
+	openProjects := []string{}
+	for _, n := range names {
+		if !strings.HasPrefix(n, wsPrefix) {
+			continue
+		}
+		openProjects = append(openProjects, strings.TrimPrefix(n, wsPrefix+"-"))
+	}
+
+	return openProjects
 }
 
 func CloseAllSessionsInWorkspace(wc config.WorkspaceConfig) {

@@ -12,7 +12,6 @@ import (
 	"github.com/JamesTiberiusKirk/workspacer/log"
 	"github.com/JamesTiberiusKirk/workspacer/state"
 	"github.com/joho/godotenv"
-	gotmux "github.com/jubnzv/go-tmux"
 )
 
 const (
@@ -42,26 +41,6 @@ func LoadEnvFile(wc config.WorkspaceConfig) {
 	}
 
 	state.LoadedEnvPath = path // Record which env file was loaded
-}
-
-func GetOpenProjectsByWorkspace(wsPrefix string) []string {
-	server := new(gotmux.Server)
-	sessions, err := server.ListSessions()
-	if err != nil {
-		log.Error("could not get tmux sessions: %s\n",
-			err.Error())
-		return []string{}
-	}
-
-	openProjects := []string{}
-	for _, s := range sessions {
-		if !strings.HasPrefix(s.Name, wsPrefix) {
-			continue
-		}
-		openProjects = append(openProjects, strings.TrimPrefix(s.Name, wsPrefix+"-"))
-	}
-
-	return openProjects
 }
 
 func GetWorkspacePath(wc config.WorkspaceConfig) string {
