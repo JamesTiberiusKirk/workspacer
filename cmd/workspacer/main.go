@@ -91,7 +91,7 @@ var ConfigMap cli.ConfigMapType = cli.ConfigMapType{
 				}
 			}
 
-			workspacer.SearchGithubInUserOrOrg(ctx.WorkspaceConfig.GithubOrg, searchArgs)
+			workspacer.SearchGithubInUserOrOrg(ctx.WorkspaceConfig, searchArgs)
 		}),
 	},
 

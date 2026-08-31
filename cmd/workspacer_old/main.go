@@ -152,7 +152,7 @@ func main() {
 			}
 		}
 
-		workspacer.SearchGithubInUserOrOrg(workspaceConfig.GithubOrg, searchArgs)
+		workspacer.SearchGithubInUserOrOrg(workspaceConfig, searchArgs)
 	case "a", "actions":
 		mainBranch := util.GetGitMainBranch(workspaceConfig, args[1])
 
