@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	gotmux "github.com/jubnzv/go-tmux"
 )
@@ -15,6 +16,12 @@ import (
 type tmuxBackend struct{}
 
 func newTmuxBackend() *tmuxBackend { return &tmuxBackend{} }
+
+// SanitizeName: tmux treats "." as the window.pane separator in targets, so a
+// dotted session name is unaddressable.
+func (b *tmuxBackend) SanitizeName(name string) string {
+	return strings.ReplaceAll(name, ".", "_")
+}
 
 func (b *tmuxBackend) HasSession(name string) bool {
 	// go-tmux's HasSession errors on an empty server, so list + scan instead

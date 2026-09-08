@@ -21,6 +21,8 @@ type SessionBackend interface {
 	// Attach connects the current terminal to name: switch-client if we're already
 	// inside a session of this backend, else attach.
 	Attach(name string) error
+	// SanitizeName strips characters this multiplexer disallows in session names.
+	SanitizeName(name string) string
 }
 
 // SessionSpec is a backend-agnostic description of a session to build.

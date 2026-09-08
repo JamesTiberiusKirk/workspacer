@@ -11,11 +11,6 @@ import (
 	"github.com/JamesTiberiusKirk/workspacer/util"
 )
 
-// sanitizeTmuxName replaces characters multiplexers disallow in session names.
-func sanitizeTmuxName(name string) string {
-	return strings.ReplaceAll(name, ".", "_")
-}
-
 // applyVimArgs appends the project's file/extra-command options to a vim-family
 // pane command (from the `project:file:extra` target syntax).
 func applyVimArgs(cmd, fileOption, extraVimCommands string) string {
@@ -35,8 +30,8 @@ func applyVimArgs(cmd, fileOption, extraVimCommands string) string {
 // after the given path and rooted in it. No workspace or preset — always tmux
 // (there's no workspace config to select a backend from).
 func StartOrSwitchToTmpSession(path string) {
-	name := sanitizeTmuxName(filepath.Base(path))
 	be := GetBackend()
+	name := be.SanitizeName(filepath.Base(path))
 
 	if !be.HasSession(name) {
 		spec := SessionSpec{Name: name, Path: path, Windows: []WindowSpec{{Panes: []PaneSpec{{}}}}}
@@ -93,8 +88,8 @@ func CloseAllSessionsInWorkspace(wc config.WorkspaceConfig) {
 // StartOrSwitchToTmuxPreset builds (or attaches to) a session from a standalone
 // preset rooted at basePath. No workspace config → always tmux.
 func StartOrSwitchToTmuxPreset(name string, basePath string, preset config.SessionConfig) {
-	name = sanitizeTmuxName(name)
 	be := GetBackend()
+	name = be.SanitizeName(name)
 
 	if be.HasSession(name) {
 		if err := be.Attach(name); err != nil {
@@ -164,12 +159,11 @@ func StartOrSwitchToSession(
 		return
 	}
 
-	sessionName := sanitizeTmuxName(project)
-	if wc.Prefix != "" {
-		sessionName = sanitizeTmuxName(wc.Prefix) + "-" + sessionName
-	}
-
 	be := GetBackend()
+	sessionName := be.SanitizeName(project)
+	if wc.Prefix != "" {
+		sessionName = be.SanitizeName(wc.Prefix) + "-" + sessionName
+	}
 	if be.HasSession(sessionName) {
 		if err := be.Attach(sessionName); err != nil {
 			fmt.Println("error ", err.Error())

@@ -20,6 +20,10 @@ func newGtmuxBackend() *gtmuxBackend {
 	return &gtmuxBackend{bin: bin}
 }
 
+// SanitizeName: gtmux never validates session names, and splits a target at the
+// LAST colon before any dot handling, so dots pass through untouched.
+func (b *gtmuxBackend) SanitizeName(name string) string { return name }
+
 func (b *gtmuxBackend) HasSession(name string) bool {
 	// `gtmux has <name>` exits 0 iff it exists.
 	return exec.Command(b.bin, "has", name).Run() == nil
